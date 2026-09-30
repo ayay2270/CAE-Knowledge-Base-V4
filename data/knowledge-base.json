@@ -1,0 +1,368 @@
+{
+  "_note": "Sample data for the read-only V4 viewer. Replace with the real data source later; see README.",
+  "defaultEntryId": "demo-hm-step",
+  "categories": [
+    {
+      "key": "hm",
+      "label": "HyperWorks",
+      "parent_key": null,
+      "is_active": true,
+      "sort_order": 0
+    },
+    {
+      "key": "hypermesh-2",
+      "label": "HyperMesh",
+      "parent_key": "hm",
+      "is_active": true,
+      "sort_order": 10
+    },
+    {
+      "key": "optistruct",
+      "label": "OptiStruct",
+      "parent_key": "hm",
+      "is_active": true,
+      "sort_order": 20
+    },
+    {
+      "key": "lsdyna",
+      "label": "LS-DYNA",
+      "parent_key": null,
+      "is_active": true,
+      "sort_order": 30
+    }
+  ],
+  "entries": [
+    {
+      "id": "demo-os-rbm",
+      "category": "optistruct",
+      "title": "*** ERROR # 1953：模型存在剛體模態，線性靜態分析無法求解",
+      "tags": [
+        "solver-error",
+        "boundary-condition",
+        "rigid-body"
+      ],
+      "symptom": "執行 Linear Static 時 solver 在組裝剛度矩陣後中止：\n`*** ERROR # 1953: The model has rigid body modes.`\n.out 檔列出 grid 120334 自由度 1、2、6 無約束。",
+      "root_cause": "左右支架以 `RBE2` 連接到螺栓，但螺栓本體只有 1D `CBAR`，旋轉自由度沒有傳到殼元素；另外 SPC 只拘束了 T1–T3。",
+      "solution": "1. 用 **Tools › Model Checker** 找出未連接的 component\n2. 在螺栓兩端補 `RBE2`，dependent DOF 設 `123456`\n3. 先跑 `PARAM,CHECKEL,YES` + `PARAM,GRDPNT,0` 確認質量與約束\n4. 仍不確定時加 `PARAM,INREL,-2` 做慣性釋放檢查",
+      "failed_attempts": [
+        "增加 SPC 到 123456 —— 反而把真實邊界條件改掉了",
+        "把 AUTOSPC 關掉"
+      ],
+      "notes": "常見於組件拼裝後第一次提交，建議把 Model Checker 變成提交前的固定步驟。",
+      "reference_source": "Altair OptiStruct Help — Rigid Body Modes",
+      "images": [],
+      "created_at": "2026-09-27T17:51:30.052Z",
+      "updated_at": "2026-09-30T17:51:30.053Z"
+    },
+    {
+      "id": "demo-os-mem",
+      "category": "optistruct",
+      "title": "Insufficient memory：大型模型求解時記憶體不足",
+      "tags": [
+        "solver-error",
+        "performance",
+        "memory"
+      ],
+      "symptom": "約 480 萬自由度的模型在 `SOLVE` 階段中止，訊息為 `Insufficient memory allocated, increase -len`。",
+      "root_cause": "預設 `-len` 太小，且 out-of-core 暫存資料夾指到網路磁碟，I/O 太慢。",
+      "solution": "- 提交參數加上 `-len 32000 -core in`\n- 若記憶體不足以 in-core，改 `-core out` 並把 `-tmpdir` 指到本機 SSD\n- 使用 `-nt 8` 開啟平行運算",
+      "failed_attempts": [],
+      "notes": "先用 `-check` 跑一次，.out 會估算 in-core 所需記憶體。",
+      "reference_source": "Altair Help / Internal HPC Guide",
+      "images": [],
+      "created_at": "2026-09-26T13:03:30.053Z",
+      "updated_at": "2026-09-29T13:03:30.053Z"
+    },
+    {
+      "id": "demo-os-topo",
+      "category": "optistruct",
+      "title": "拓樸最佳化結果出現棋盤格（checkerboard）",
+      "tags": [
+        "optimization",
+        "mesh-quality"
+      ],
+      "symptom": "密度結果呈現黑白交錯的棋盤格，無法轉成可製造的幾何。",
+      "root_cause": "沒有設定最小尺寸控制 `MINDIM`，網格尺寸與設計特徵尺寸接近。",
+      "solution": "1. `DTPL` 加上 `MINDIM`，約為平均元素尺寸的 3 倍\n2. 視需求加 `MAXDIM` 與製造限制（`DRAW`、`EXTR`）\n3. 以 `DISCRETE` 2.0–3.0 提高 0/1 收斂度",
+      "failed_attempts": [
+        "只把網格加密 —— 棋盤格變細但沒有消失"
+      ],
+      "notes": "",
+      "reference_source": "",
+      "images": [],
+      "created_at": "2026-09-24T22:39:30.053Z",
+      "updated_at": "2026-09-27T22:39:30.053Z"
+    },
+    {
+      "id": "demo-hm-step",
+      "category": "hypermesh-2",
+      "title": "STEP 匯入後幾何破面，free edges 無法補面",
+      "tags": [
+        "geometry",
+        "cleanup",
+        "step"
+      ],
+      "symptom": "CAD 匯入後出現破面、縫隙，無法產生封閉 mid-surface 或 solid map。Geometry › Free edges 顯示紅色邊界約 120 條。",
+      "root_cause": "CAD 輸出公差（0.01 mm）小於 HyperMesh 的 cleanup tolerance，縫合沒有成功。",
+      "solution": "1. **Geometry › Autocleanup** 前先把 cleanup tol 設成 0.1\n2. 使用 **Edge Edit › Toggle / Equivalence** 合併重複邊\n3. 仍開口的區域用 **Surface › Fill** 補面，再 `Stitch`",
+      "failed_attempts": [
+        "重新匯出 IGES —— 破面更多"
+      ],
+      "notes": "請 CAD 端以 AP214 輸出、公差 0.001 mm，品質明顯較好。",
+      "reference_source": "Altair HyperMesh Help — Geometry Cleanup",
+      "images": [],
+      "created_at": "2026-09-27T05:51:30.053Z",
+      "updated_at": "2026-09-30T05:51:30.053Z",
+      "figures": [
+        {
+          "id": "fig-01",
+          "order": 1,
+          "section": "symptom",
+          "step": 0,
+          "key": true,
+          "title": "Free edges 顯示紅色邊界",
+          "caption": "Geometry › Free edges：匯入後約 120 條自由邊（紅），集中在曲面交界。",
+          "src": "assets/figures/fig-01-free-edges.svg",
+          "mock": true,
+          "defaultVisible": true
+        },
+        {
+          "id": "fig-02",
+          "order": 2,
+          "section": "root_cause",
+          "step": 0,
+          "title": "間隙與 cleanup tolerance",
+          "caption": "CAD 間隙約 0.01 mm，超出預設 tol，因此無法自動縫合。",
+          "src": "assets/figures/fig-02-cleanup-tolerance.svg",
+          "mock": true,
+          "defaultVisible": true
+        },
+        {
+          "id": "fig-03",
+          "order": 3,
+          "section": "solution",
+          "step": 1,
+          "title": "Autocleanup：cleanup tol = 0.1",
+          "caption": "先把 cleanup tol 由預設值調為 0.1 再執行。",
+          "src": "assets/figures/fig-03-autocleanup-panel.svg",
+          "mock": true,
+          "defaultVisible": true
+        },
+        {
+          "id": "fig-04",
+          "order": 4,
+          "section": "solution",
+          "step": 2,
+          "title": "Edge Edit：合併重複邊",
+          "caption": "Toggle / Equivalence 合併重複邊，紅線會轉為綠線。",
+          "src": "assets/figures/fig-04-edge-equivalence.svg",
+          "mock": true,
+          "defaultVisible": true
+        },
+        {
+          "id": "fig-05",
+          "order": 5,
+          "section": "solution",
+          "step": 3,
+          "title": "Surface Fill + Stitch",
+          "caption": "仍開口的區域補面後再 Stitch。",
+          "src": "assets/figures/fig-05-surface-fill-stitch.svg",
+          "mock": true,
+          "defaultVisible": true
+        },
+        {
+          "id": "fig-06",
+          "order": 6,
+          "section": "solution",
+          "step": "v",
+          "title": "修補前 / 修補後",
+          "caption": "free edges 由 120 降至 2，剩餘兩條為倒角尖點。",
+          "src": "assets/figures/fig-06-before-after.svg",
+          "mock": true,
+          "defaultVisible": true
+        },
+        {
+          "id": "fig-07",
+          "order": 7,
+          "section": "symptom",
+          "step": 0,
+          "title": "Autocleanup 警告訊息",
+          "caption": "12 個 surface 縫合失敗；tolerance 小於邊界間隙。",
+          "src": "assets/figures/fig-07-autocleanup-warning.svg",
+          "mock": true,
+          "defaultVisible": true
+        },
+        {
+          "id": "fig-08",
+          "order": 8,
+          "section": "solution",
+          "step": "v",
+          "title": "修補後 2D 網格品質",
+          "caption": "Jacobian ≥ 0.6 達 99.1%，可繼續產生 solid map。",
+          "src": "assets/figures/fig-08-mesh-quality.svg",
+          "mock": true,
+          "defaultVisible": true
+        },
+        {
+          "id": "fig-09",
+          "order": 9,
+          "section": "solution",
+          "step": "v",
+          "title": "後續分析應力分佈",
+          "caption": "模型可求解；最大應力 312.4 MPa 位於孔邊，無縫隙造成的假性集中。",
+          "src": "assets/figures/fig-09-stress-contour.svg",
+          "mock": true,
+          "defaultVisible": false
+        },
+        {
+          "id": "fig-10",
+          "order": 10,
+          "section": "ref",
+          "step": 0,
+          "title": "供應商檢驗報告",
+          "caption": "Surface gap 0.010 mm 被標為 NOTE，與 HyperMesh 觀察一致。",
+          "src": "assets/figures/fig-10-inspection-report.svg",
+          "mock": true,
+          "defaultVisible": false
+        },
+        {
+          "id": "fig-11",
+          "order": 11,
+          "section": "fails",
+          "step": 0,
+          "title": "重新匯出 IGES 的結果",
+          "caption": "破面反而增加（左：STEP，右：IGES）。",
+          "src": "assets/figures/fig-11-iges-comparison.svg",
+          "mock": true,
+          "defaultVisible": false
+        },
+        {
+          "id": "fig-12",
+          "order": 12,
+          "section": "note",
+          "step": 0,
+          "title": "CAD 端建議輸出設定",
+          "caption": "AP214、公差 0.001 mm，品質明顯較好。",
+          "src": "assets/figures/fig-12-cad-export-settings.svg",
+          "mock": true,
+          "defaultVisible": false
+        }
+      ]
+    },
+    {
+      "id": "demo-hm-mid",
+      "category": "hypermesh-2",
+      "title": "Mid-surface 抽取失敗：肋條厚度不一致",
+      "tags": [
+        "geometry",
+        "midsurface"
+      ],
+      "symptom": "`Midsurface › Auto Extract` 在薄肋與主體交界處產生缺口，部分肋條沒有被抽出。",
+      "root_cause": "肋條有拔模角，厚度從 1.8 mm 漸變到 2.6 mm，自動辨識的 thickness pair 不一致。",
+      "solution": "- 改用 **Surface Pair** 手動指定上下面\n- 對拔模肋條使用 **Offset** 後再 `Extend` 接回主面\n- 厚度以 `Assign thickness from midsurface` 自動回填",
+      "failed_attempts": [],
+      "notes": "",
+      "reference_source": "",
+      "images": [],
+      "created_at": "2026-09-25T17:51:30.053Z",
+      "updated_at": "2026-09-28T17:51:30.053Z"
+    },
+    {
+      "id": "demo-hm-jac",
+      "category": "hypermesh-2",
+      "title": "Element quality：Jacobian < 0.6 無法通過品質檢查",
+      "tags": [
+        "mesh-quality",
+        "jacobian"
+      ],
+      "symptom": "倒角附近的 2D 元素 Jacobian 低於 0.6，約 340 個元素無法通過品質門檻。",
+      "root_cause": "倒角寬度小於網格尺寸，四邊形元素被壓扁。",
+      "solution": "1. 對小倒角使用 **Defeature › Fillets** 或改成 2 排元素\n2. 以 **2D › Qualityindex** 設定目標後執行 `Clean up`\n3. 局部改用 trias，比例控制在 5% 以內",
+      "failed_attempts": [],
+      "notes": "",
+      "reference_source": "",
+      "images": [],
+      "created_at": "2026-09-22T22:39:30.053Z",
+      "updated_at": "2026-09-25T22:39:30.053Z"
+    },
+    {
+      "id": "demo-ls-negvol",
+      "category": "lsdyna",
+      "title": "Negative volume in solid element — 計算中止",
+      "tags": [
+        "solver-error",
+        "contact",
+        "mesh-quality"
+      ],
+      "symptom": "約 18 ms 時 d3hsp 顯示：\n`*** Error 40509 (SOL+509) negative volume in solid element # 2004871`\n隨後計算中止。",
+      "root_cause": "泡棉材料（`*MAT_057`）在大變形下元素嚴重扭曲，且與鋼板之間的接觸剛度不足。",
+      "solution": "1. 泡棉 part 改用 `ELFORM=-1` 或 `ELFORM=-2`\n2. 加入 `*CONTACT_INTERIOR` 防止元素翻轉\n3. `*CONTROL_SOLID` 設 `ERODE=1`，`*CONTROL_TIMESTEP` 設 `DTMIN`\n4. 接觸改 `SOFT=2`",
+      "failed_attempts": [
+        "單純降低時間步長 —— 只延後錯誤出現的時間"
+      ],
+      "notes": "先檢查是否為局部初始穿透造成的扭曲。",
+      "reference_source": "LS-DYNA Keyword Manual Vol. I / Internal Test",
+      "images": [],
+      "created_at": "2026-09-27T13:03:30.053Z",
+      "updated_at": "2026-09-30T13:03:30.053Z"
+    },
+    {
+      "id": "demo-ls-hg",
+      "category": "lsdyna",
+      "title": "Hourglass energy 超過 internal energy 的 10%",
+      "tags": [
+        "energy",
+        "mesh-quality",
+        "hourglass"
+      ],
+      "symptom": "glstat 中 hourglass energy 在 30 ms 後持續上升，最後約為 internal energy 的 14%。",
+      "root_cause": "大量使用 `ELFORM=2` 單點積分殼元素，且未設定 hourglass 控制。",
+      "solution": "- `*HOURGLASS` 使用 `IHQ=4`（剛度型），`QM=0.05`\n- 高應變區改用 `ELFORM=16` 全積分殼\n- 以 `*DATABASE_MATSUM` 找出能量集中的 part",
+      "failed_attempts": [],
+      "notes": "判斷標準：HG / IE < 10%，局部 part 最好 < 5%。",
+      "reference_source": "",
+      "images": [],
+      "created_at": "2026-09-26T01:03:30.053Z",
+      "updated_at": "2026-09-29T01:03:30.053Z"
+    },
+    {
+      "id": "demo-ls-pen",
+      "category": "lsdyna",
+      "title": "*CONTACT 初始穿透警告（initial penetration）",
+      "tags": [
+        "contact",
+        "geometry"
+      ],
+      "symptom": "messag 出現大量 `Warning 30204: initial penetration`，部分節點被移動。",
+      "root_cause": "殼元素厚度造成的接觸厚度重疊，幾何原本就緊貼。",
+      "solution": "1. `*CONTROL_CONTACT` 設 `IGNORE=1`\n2. 或在 `*CONTACT_AUTOMATIC_SURFACE_TO_SURFACE` 使用 `SST/MST` 縮小接觸厚度\n3. 以 LS-PrePost **Contact › Check** 先修正幾何",
+      "failed_attempts": [],
+      "notes": "",
+      "reference_source": "",
+      "images": [],
+      "created_at": "2026-09-23T22:39:30.053Z",
+      "updated_at": "2026-09-26T22:39:30.053Z"
+    },
+    {
+      "id": "demo-ls-ms",
+      "category": "lsdyna",
+      "title": "Mass scaling（DT2MS）造成質量增加過多",
+      "tags": [
+        "performance",
+        "energy",
+        "mass-scaling"
+      ],
+      "symptom": "d3hsp 顯示 added mass 為原始質量的 6.8%，動態結果明顯偏移。",
+      "root_cause": "`DT2MS` 目標時間步長設得太大，少數小元素被大量加質量。",
+      "solution": "- 先找出控制時間步長的小元素並重劃網格\n- `DT2MS` 設定成 added mass < 2% 的值\n- 以 `*DATABASE_GLSTAT` 監控 added mass",
+      "failed_attempts": [
+        "整體放大 DT2MS 以縮短計算時間"
+      ],
+      "notes": "",
+      "reference_source": "",
+      "images": [],
+      "created_at": "2026-09-20T22:39:30.053Z",
+      "updated_at": "2026-09-23T22:39:30.053Z"
+    }
+  ]
+}

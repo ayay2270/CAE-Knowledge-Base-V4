@@ -1,0 +1,13 @@
+{
+  "name": "cae-knowledge-base-v4",
+  "version": "4.0.0",
+  "private": true,
+  "description": "CAE Knowledge Base V4 — read-only knowledge-base viewer (static site, local data).",
+  "type": "module",
+  "scripts": {
+    "start": "node scripts/serve.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

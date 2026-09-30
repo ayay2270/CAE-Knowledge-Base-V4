@@ -1,0 +1,10 @@
+{
+  "_note": "QA only. Loaded when the page is opened with ?long=1; appends text to one sample entry to exercise long-article layout.",
+  "entryId": "demo-hm-step",
+  "append": {
+    "symptom": "\n\n補充觀察：\n- 同一零件以 STEP AP203 與 AP214 匯入，破面位置相同\n- 破面集中在倒角與曲面交界，平面區域正常\n- 以 Geometry › Quick Edit 手動縫合只能處理少數邊界",
+    "root_cause": "\n\n進一步排查發現，該零件是由多個 CAD body 布林合併而成，交界處的曲面各自帶有 0.005–0.012 mm 的浮動。HyperMesh 的 cleanup 演算法會先合併頂點再判斷邊界，若 tolerance 小於浮動量，頂點不會被合併，後續 Stitch 也就找不到可配對的邊。",
+    "solution": "\n4. 對倒角尖點殘留的 free edges，用 **Geometry › Quick Edit › Replace Point** 逐點處理\n5. 全部完成後執行 **Tools › Model Checker** 確認 `Free edges = 0`\n6. 將處理後的 `.hm` 另存新檔，並保留原始 STEP 以便日後比對\n7. 將 cleanup tol 與 feature angle 記錄到零件編號對應的處理紀錄",
+    "notes": "\n\n長時間批次處理時，建議先以 `-nogui` 批次執行 Autocleanup，再人工檢查殘留邊。批次腳本可重複使用，並能確保不同工程師使用相同容差。"
+  }
+}
