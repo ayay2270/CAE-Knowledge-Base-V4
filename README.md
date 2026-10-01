@@ -1,5 +1,7 @@
 # CAE Knowledge Base V4
 
+**Live site: https://ayay2270.github.io/CAE-Knowledge-Base-V4/** (GitHub Pages, served from `main`, root folder)
+
 A viewer for CAE troubleshooting articles (HyperMesh / OptiStruct / LS-DYNA style problems).
 Each article follows **problem → cause → solution**, records approaches that did not work, notes and
 references, and carries engineering figures with captions linked to the section or step they illustrate.
