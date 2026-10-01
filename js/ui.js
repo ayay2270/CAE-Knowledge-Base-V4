@@ -11,6 +11,7 @@ function appMarkup() {
       <div class="c-drop hidden" id="cDrop" role="listbox"></div>
     </div>
     <span class="spacer"></span>
+    <span id="acct" class="k-acct"></span>
     <button class="k-add" data-act="kAdd"><i class="ti ti-plus" aria-hidden="true"></i><span>新增知識</span></button>
   </header>
   <div class="k-layout" id="layout">

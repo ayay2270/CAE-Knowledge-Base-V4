@@ -213,7 +213,7 @@ const KBH = {
         { id: 'solution', n: '3', label: KB_LABELS.solution, color: 'var(--green)', ink: '#047857', html: md(e.solution) || pending, empty: !md(e.solution) }
       ],
       tags: (e.tags || []).map(t => `<button class="tag" data-act="dtag" data-t="${esc(t)}">#${esc(t)}</button>`).join(''),
-      actions: `<button class="btn" data-act="copylink" title="複製連結" aria-label="複製連結"><i class="ti ti-link"></i></button>`,
+      actions: `<button class="btn" data-act="copylink" title="複製連結" aria-label="複製連結"><i class="ti ti-link"></i></button>` + (KBData.canDelete && KBData.canDelete(e.id) ? `<button class="btn danger" data-act="kDelete" data-id="${esc(e.id)}" title="刪除這篇知識" aria-label="刪除這篇知識"><i class="ti ti-trash"></i></button>` : ''),
       failsHtml: fails.length ? `<ul>${fails.map(f => `<li>${inline(esc(f))}</li>`).join('')}</ul>` : '',
       noteHtml: note ? md(note) : '',
       refHtml: ref ? md(ref) : ''

@@ -2,7 +2,7 @@
   "name": "cae-knowledge-base-v4",
   "version": "4.0.0",
   "private": true,
-  "description": "CAE Knowledge Base V4 — read-only knowledge-base viewer (static site, local data).",
+  "description": "CAE Knowledge Base V4 — knowledge-base site (static, local data or Supabase).",
   "type": "module",
   "scripts": {
     "start": "node scripts/serve.mjs",

@@ -365,3 +365,29 @@ body.c-lb-open{overflow:hidden}
 .k-fields>.k-prev,.k-fields>.k-hint{grid-column:1/-1}
 .k-prev .k-tags{justify-content:flex-start;margin-bottom:6px}
 .k-rc .k-proto:first-child{margin-left:0}
+
+/* ---------- login (Supabase mode) ---------- */
+.k-acct{display:flex;align-items:center;gap:10px;flex:none}
+.k-who{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--mute);max-width:220px}
+.k-who span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.k-who i{font-size:17px;color:var(--acc)}
+.k-login{display:inline-flex;align-items:center;gap:6px;height:38px;padding:0 14px;border:1px solid var(--line2);border-radius:10px;background:#fff;font-size:14px;font-weight:600;white-space:nowrap}
+.k-login:hover{background:var(--bg)}
+.k-login i{font-size:18px}
+.k-modal{position:fixed;inset:0;z-index:300;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(15,23,42,.45)}
+.k-dialog{width:100%;max-width:400px;background:#fff;border-radius:14px;padding:24px 26px;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.k-dialog h2{margin:0 0 4px;font-size:20px}
+.k-dsub{margin:0 0 16px;font-size:13px;color:var(--mute)}
+.k-dialog .k-lab{display:block;margin:12px 0 4px;font-size:13px;font-weight:600}
+.k-dialog input{width:100%;height:40px;padding:0 12px;border:1px solid var(--line2);border-radius:9px;font-size:14px}
+.k-dialog .k-err{min-height:20px;margin-top:10px;font-size:13px;color:#B91C1C}
+.k-dact{display:flex;justify-content:flex-end;gap:10px;margin-top:8px}
+.k-proto-note.live{border-color:#BFDBFE;background:#EFF6FF;color:#1E3A8A}
+.k-spin{width:14px;height:14px;border:2px solid rgba(255,255,255,.5);border-top-color:#fff;border-radius:50%;animation:kspin .7s linear infinite}
+@keyframes kspin{to{transform:rotate(360deg)}}
+.k-btn:disabled{opacity:.6;cursor:default}
+@media (max-width:760px){.k-who span{display:none}}
+
+.k-img select{width:100%;margin-top:6px;padding:6px 8px;font-size:12.5px;border:1px solid var(--line2);border-radius:8px;background:#fff}
+
+.btn.danger:hover{color:#B42318;border-color:#E8B4AE;background:#FEF3F2}

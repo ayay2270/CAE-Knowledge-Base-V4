@@ -1,7 +1,7 @@
 /* Browser configuration.
 
    Leave `url` and `publishableKey` empty to run on the local sample data (data/knowledge-base.json).
-   Otherwise V4 reads from this Supabase project (read-only).
+   Otherwise V4 reads from this Supabase project; signed-in users can add entries (see README, Phase 2).
 
    The publishable key is public by design — access is limited by Row Level Security.
    NEVER put a secret key, a service_role key or the database password here.

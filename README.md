@@ -18,11 +18,11 @@ references, and carries engineering figures with captions linked to the section 
 
 - **Two data sources.** By default V4 reads the local sample data (`data/knowledge-base.json`). When `js/config.js` holds a
   Supabase Project URL and **publishable** key, V4 reads categories, entries and images from Supabase instead
-  (**read-only**, see "Supabase" below). `?source=local` forces the local data.
-- **No login, no writes.** The site only reads. It never contains a secret key, service_role key or database password.
-- **新增知識 is still a local prototype.** The four-step form (基本資訊 → 內容填寫 → 附圖與其他 → 確認儲存) produces
+  (see "Supabase" below). `?source=local` forces the local data.
+- **Reading needs no login.** Visitors only read. Writing needs a signed-in account (see "Phase 2" below). The site never contains a secret key, service_role key or database password.
+- **新增知識** — with Supabase configured and a signed-in user it saves to the database (insert only). Without Supabase it stays a local prototype: The four-step form (基本資訊 → 內容填寫 → 附圖與其他 → 確認儲存) produces
   an entry in the normal knowledge schema, but "save" only writes to this browser's LocalStorage
-  (`js/local-store.js`). Nothing is uploaded; entries are marked **本機原型**. Real saving comes with the login phase.
+  (`js/local-store.js`). In prototype mode nothing is uploaded; entries are marked **本機原型**.
 
 ## Run locally
 
@@ -57,7 +57,8 @@ css/styles.css        styles
 js/config.js          Supabase Project URL + publishable key (empty = local data)
 js/data-provider.js   picks the data source; the UI only talks to KBData
 js/provider-local.js  local sample data (JSON)
-js/provider-supabase.js  read-only Supabase provider
+js/provider-supabase.js  Supabase provider (anonymous reads, signed-in insert, strict request allow-list)
+js/auth-ui.js         login button + dialog
 js/core.js            state, software-category helpers, text / markdown helpers
 js/figures.js         figure model, article page, figure gallery, lightbox
 js/local-store.js     PROTOTYPE: browser-local storage for 新增知識
@@ -94,7 +95,7 @@ UI  →  KBData.load() / prepareImages() / imageUrl()  →  Supabase (if configu
 
 Solution steps are written as a numbered list (`1.`, `2.`, …); figures with `step: n` attach to step *n*.
 
-## Supabase (read-only)
+## Supabase (reading)
 
 1. Create a **new** Supabase project for V4. (The V2 production and V3 development projects are blocked in
    `js/provider-supabase.js` so V4 cannot be pointed at them by accident.)
@@ -115,9 +116,30 @@ Solution steps are written as a numbered list (`1.`, `2.`, …); figures with `s
   short-lived signed URLs) or `{ "src": "<static url>" }`, and may add `caption`, `title`, `section`, `step`,
   `order`, `key` so a figure attaches to a section / step exactly like the local sample.
 
-### Next phase (not built yet)
+## Phase 2 — login and saving from 新增知識
 
-Email/password login, saving from 新增知識 (insert policies, image upload), and turning off public sign-ups.
+Anonymous visitors still only read. A signed-in user can **add** entries and upload images. There is no edit
+in this phase (no update policy exists and the provider has no code path for it); delete comes in Phase 3.
+
+1. In **SQL Editor** run `supabase/phase2-auth-write.sql` (safe to re-run). It grants `insert` on `entries` to the
+   `authenticated` role only with `user_id = auth.uid()`, and lets a signed-in user upload into **their own folder**
+   (`<user id>/…`) of the private `kb-images` bucket.
+2. **Authentication → Sign In / Providers → Email**: switch **Allow new users to sign up** OFF (public sign-ups closed).
+3. **Authentication → Users → Add user → Create new user**: create your account with email + password and tick
+   *Auto Confirm User*. (Passwords are typed only into Supabase, never into this repository.)
+4. Open the site, click **登入**, then **新增知識** → fill the form → **儲存到資料庫**.
+
+## Phase 3 — delete your own entries
+
+Run `supabase/phase3-delete-own.sql` in the SQL Editor (safe to re-run). A signed-in user then sees a trash button on
+the entries **they created**; it deletes the entry and its images (after a confirmation). The database allows delete only
+where `entries.user_id = auth.uid()` and only for files in the user's own `kb-images` folder, so the sample entries
+(no author) and other people's entries cannot be deleted from the site. There is still no edit.
+
+How it is locked down: the browser only ever sends the requests listed in `RULES` in `js/provider-supabase.js`
+(anonymous reads, sign-in/refresh/logout, one `POST` to `entries`, one `POST` per image into the user's own folder);
+anything else throws before leaving the browser. Row Level Security in the database is the real gate. The login session
+is kept in this browser's localStorage (`cae-kb-v4-auth`).
 
 ## Software icons
 

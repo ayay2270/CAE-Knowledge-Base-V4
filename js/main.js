@@ -14,6 +14,7 @@ async function boot() {
     $('#detail').innerHTML = `<div class="c-page-wrap">${emptyHtml('ti-database-off', '資料載入失敗', esc(err.message || String(err)) + '<br>' + hint)}</div>`;
     return;
   }
+  authRenderHeader();
   renderSide();
   afterLoad();
 }
