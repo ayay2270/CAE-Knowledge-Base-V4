@@ -53,9 +53,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 
 /* Application state. */
 const S = { entries: [], filter: 'all', tag: null, q: '', sort: 'new', sel: null, gi: 0 };
-const APP = { defaultEntryId: null };
 
-const HEX = `<svg width="26" height="26" viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="8" fill="#FACC15"/><g fill="none" stroke="#1E3A8A" stroke-width="1.7" stroke-linecap="round"><path d="M7 8 Q16 6 25 8"/><path d="M7 16 Q16 13 25 16"/><path d="M7 24 Q16 21 25 24"/><path d="M7 8 L7 24"/><path d="M16 6.6 Q14.8 15 16 22.6"/><path d="M25 8 L25 24"/></g><g fill="#1E3A8A"><circle cx="7" cy="8" r="1.5"/><circle cx="16" cy="6.6" r="1.5"/><circle cx="25" cy="8" r="1.5"/><circle cx="7" cy="16" r="1.5"/><circle cx="25" cy="16" r="1.5"/><circle cx="7" cy="24" r="1.5"/><circle cx="16" cy="22.6" r="1.5"/><circle cx="25" cy="24" r="1.5"/></g><circle cx="15.4" cy="14.4" r="2.4" fill="#EF4444"/></svg>`;
 
 /* ---------- filtering and search ---------- */
 function inFilter(e, f = S.filter) {
@@ -168,6 +166,15 @@ const KBH = {
       out.push({ c: r, kids });
     }
     for (const c of shownCats()) if (!placed.has(c.key)) out.push({ c, kids: [] });
+    return out;
+  },
+  /* Leaf categories in tree order: [{c, parent}] */
+  leaves() {
+    const out = [];
+    for (const { c, kids } of KBH.tree()) {
+      if (kids.length) kids.forEach(k => out.push({ c: k, parent: c }));
+      else out.push({ c, parent: null });
+    }
     return out;
   },
   plain(s) { return String(s || '').replace(/`([^`]+)`/g, '$1').replace(/\*\*([^*]+)\*\*/g, '$1').replace(/^\s*([-*•]|\d+[.)])\s+/gm, '').replace(/\s+/g, ' ').trim(); },

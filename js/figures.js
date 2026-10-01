@@ -62,9 +62,9 @@ function cArticle(el, e) {
   const related = S.entries.filter(x => x.id !== e.id && (x.tags || []).some(t => (e.tags || []).includes(t))).slice(0, 4);
   el.innerHTML = `<div class="c-page-wrap">
     <article class="c-article">
-      ${cCrumb([{ t: '總覽', act: 'cHome' }, { t: root.label || '其他', act: 'cIndex' }, ...(p.c.parent ? [{ t: p.c.label, act: 'cIndex' }] : []), { t: e.title }])}
+      ${cCrumb([{ t: '所有文章', act: 'cHome' }, { t: root.label || '其他', act: 'cCat', k: C.root }, ...(p.c.parent ? [{ t: p.c.label, act: 'cCat', k: e.category }] : []), { t: e.title }])}
       <h1>${esc(e.title)}</h1>
-      <div class="c-meta"><span>${KBH.icon(e.category)}${esc(p.c.path)}</span><span><i class="ti ti-calendar"></i>${fmtDate(e.updated_at)} 更新</span><span><i class="ti ti-clock"></i>約 ${Math.max(1, Math.round(words / 350))} 分鐘閱讀</span>${figs.length ? `<span><i class="ti ti-photo"></i>${figs.length} 張圖</span>` : ''}
+      <div class="c-meta"><span>${KBH.icon(e.category)}${esc(p.c.path)}</span><span><i class="ti ti-calendar"></i>${fmtDate(e.updated_at)} 更新</span><span><i class="ti ti-clock"></i>約 ${Math.max(1, Math.round(words / 350))} 分鐘閱讀</span>${figs.length ? `<span><i class="ti ti-photo"></i>${figs.length} 張圖</span>` : ''}${e._prototype ? '<span class="k-proto">本機原型</span>' : ''}
         <span class="c-actions">${p.actions}</span></div>
       ${p.tags ? `<div class="tags">${p.tags}</div>` : ''}
       ${sect('symptom', '問題現象', `<div class="prose">${md(e.symptom) || '<span class="pending">尚未填寫</span>'}</div>` + refsFor('symptom'))}

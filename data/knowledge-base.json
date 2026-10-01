@@ -1,34 +1,37 @@
 {
   "_note": "Sample data for the read-only V4 viewer. Replace with the real data source later; see README.",
-  "defaultEntryId": "demo-hm-step",
   "categories": [
     {
       "key": "hm",
       "label": "HyperWorks",
       "parent_key": null,
       "is_active": true,
-      "sort_order": 0
+      "sort_order": 0,
+      "description": "包含 HyperMesh、OptiStruct 相關的除錯、設定與分析問題"
     },
     {
       "key": "hypermesh-2",
       "label": "HyperMesh",
       "parent_key": "hm",
       "is_active": true,
-      "sort_order": 10
+      "sort_order": 10,
+      "description": "幾何處理、網格、模型建構相關問題"
     },
     {
       "key": "optistruct",
       "label": "OptiStruct",
       "parent_key": "hm",
       "is_active": true,
-      "sort_order": 20
+      "sort_order": 20,
+      "description": "結構分析、最佳化相關問題"
     },
     {
       "key": "lsdyna",
       "label": "LS-DYNA",
       "parent_key": null,
       "is_active": true,
-      "sort_order": 30
+      "sort_order": 30,
+      "description": "顯式動力學分析：接觸、能量、穩定性與計算中止相關問題"
     }
   ],
   "entries": [

@@ -3,7 +3,7 @@
    Current implementation: LOCAL, READ-ONLY static JSON (data/knowledge-base.json).
 
    The UI talks to `KBData` only, through this contract:
-     KBData.load()                 -> Promise<{ categories, entries, defaultEntryId }>
+     KBData.load()                 -> Promise<{ categories, entries }>
      KBData.prepareImages(paths)   -> Promise<void>   resolve / prefetch URLs for stored images
      KBData.imageUrl(path)         -> string          URL usable in <img src>
 
@@ -38,7 +38,7 @@ const KBData = (() => {
         entries = entries.map(e => e.id !== patch.entryId ? e
           : { ...e, ...Object.fromEntries(Object.entries(patch.append).map(([k, v]) => [k, (e[k] || '') + v])) });
       }
-      return { categories: db.categories || [], entries, defaultEntryId: db.defaultEntryId || null };
+      return { categories: db.categories || [], entries };
     },
     async prepareImages() { /* local files need no preparation */ },
     imageUrl(path) { return path; }

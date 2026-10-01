@@ -1,0 +1,187 @@
+/* 新增知識 — Add Knowledge flow (PROTOTYPE).
+
+   A four-step form that produces an entry in the existing knowledge schema:
+   title, category, symptom, root_cause, solution, failed_attempts, notes, reference_source, tags, images.
+   PROTOTYPE BEHAVIOUR: "save" only writes to this browser's LocalStorage (see js/local-store.js).
+   It does not write to GitHub or any database. */
+const AK = { step: 1, d: null, err: {}, prev: null };
+const AK_STEPS = ['基本資訊', '內容填寫', '附圖與其他', '確認儲存'];
+const AK_MAX_IMAGES = 8;
+
+function akBlank() { return { root: '', sub: '', title: '', symptom: '', root_cause: '', solution: '', failed: [''], notes: '', ref: '', tags: '', images: [] }; }
+function akRootNode(key) { return KBH.tree().find(t => t.c.key === key); }
+function akCategoryKey(d) { const n = akRootNode(d.root); return n && n.kids.length ? d.sub : d.root; }
+function akDirty() { const d = AK.d; return !!d && !!(d.title || d.symptom || d.root_cause || d.solution || d.notes || d.ref || d.tags || d.images.length || d.failed.some(Boolean)); }
+
+function akOpen() {
+  AK.prev = { view: C.view, cat: C.cat, sel: S.sel };
+  if (!AK.d) AK.d = akBlank();
+  AK.step = AK.step || 1; AK.err = {};
+  C.view = 'add'; S.sel = null;
+  history.replaceState(null, '', location.pathname + location.search);
+  renderSide(); renderDetail(true);
+}
+function akClose(toSaved) {
+  const p = AK.prev || { view: 'all' };
+  AK.d = null; AK.step = 1; AK.err = {};
+  if (toSaved) return;
+  if (p.view === 'category' && p.cat) { C.view = 'category'; C.cat = p.cat; }
+  else if (p.view === 'article' && p.sel && S.entries.some(e => e.id === p.sel)) { return cOpen(p.sel); }
+  else C.view = 'all';
+  renderSide(); renderDetail(true);
+}
+
+/* ---------- validation ---------- */
+function akValidate(step) {
+  const d = AK.d, err = {}, need = 'required';
+  if (step === 1) {
+    if (!d.root) err.root = need;
+    const n = akRootNode(d.root);
+    if (n && n.kids.length && !d.sub) err.sub = need;
+    if (!d.title.trim()) err.title = need;
+  }
+  if (step === 2) { for (const f of ['symptom', 'root_cause', 'solution']) if (!d[f].trim()) err[f] = need; }
+  AK.err = err;
+  return !Object.keys(err).length;
+}
+
+/* ---------- rendering ---------- */
+const akFieldErr = f => AK.err[f] ? `<div class="k-err" role="alert">此欄位必填</div>` : '';
+const akInv = f => AK.err[f] ? ' aria-invalid="true"' : '';
+function akStepBody() {
+  const d = AK.d;
+  if (AK.step === 1) {
+    const roots = KBH.tree(), n = akRootNode(d.root);
+    return `<div class="k-f"><label for="ak-root">軟體分類 <b>*</b></label>
+        <select id="ak-root" data-f="root"${akInv('root')}><option value="">請選擇軟體</option>${roots.map(({ c }) => `<option value="${esc(c.key)}" ${d.root === c.key ? 'selected' : ''}>${esc(c.label)}</option>`).join('')}</select>${akFieldErr('root')}</div>
+      <div class="k-f"><label for="ak-sub">子分類 ${n && n.kids.length ? '<b>*</b>' : ''}</label>
+        <select id="ak-sub" data-f="sub" ${n && n.kids.length ? '' : 'disabled'}${akInv('sub')}>${n && n.kids.length ? `<option value="">請選擇子分類</option>${n.kids.map(k => `<option value="${esc(k.key)}" ${d.sub === k.key ? 'selected' : ''}>${esc(k.label)}</option>`).join('')}` : `<option value="">${d.root ? '（此軟體沒有子分類）' : '請先選擇軟體分類'}</option>`}</select>${akFieldErr('sub')}</div>
+      <div class="k-f wide"><label for="ak-title">標題（問題現象） <b>*</b></label>
+        <input id="ak-title" data-f="title" value="${esc(d.title)}" placeholder="例如：STEP 匯入後幾何破面，free edges 無法補面" autocomplete="off"${akInv('title')}>${akFieldErr('title')}</div>`;
+  }
+  if (AK.step === 2) {
+    const ta = (f, label, ph, hint) => `<div class="k-f wide"><label for="ak-${f}">${label} <b>*</b></label><textarea id="ak-${f}" data-f="${f}" rows="${f === 'solution' ? 7 : 5}" placeholder="${esc(ph)}"${akInv(f)}>${esc(d[f])}</textarea>${hint ? `<div class="k-hint">${hint}</div>` : ''}${akFieldErr(f)}</div>`;
+    return ta('symptom', '問題現象', '描述遇到的問題現象、錯誤訊息、發生情境…', '可用 `反引號` 標示指令或關鍵字、**粗體** 標示重點。') +
+      ta('root_cause', '原因分析', '說明造成問題的原因…', '') +
+      ta('solution', '解決方法', '1. 第一步…\n2. 第二步…\n3. 第三步…', '每行一個步驟，以「1.」「2.」「3.」編號，文章會顯示成步驟清單。');
+  }
+  if (AK.step === 3) {
+    return `<div class="k-f wide"><label>試過但無效</label>
+        ${d.failed.map((f, i) => `<div class="k-failrow"><input data-f="failed" data-i="${i}" value="${esc(f)}" placeholder="例如：重新匯出 IGES —— 破面更多" autocomplete="off" aria-label="試過但無效 ${i + 1}"><button type="button" class="k-x" data-act="akRmFail" data-i="${i}" aria-label="移除這一項"${d.failed.length < 2 && !f ? ' disabled' : ''}><i class="ti ti-x"></i></button></div>`).join('')}
+        <button type="button" class="k-link" data-act="akAddFail"><i class="ti ti-plus"></i>再加一項</button></div>
+      <div class="k-f wide"><label for="ak-notes">備註</label><textarea id="ak-notes" data-f="notes" rows="3" placeholder="補充說明、使用限制、注意事項…">${esc(d.notes)}</textarea></div>
+      <div class="k-f wide"><label for="ak-ref">參考來源</label><input id="ak-ref" data-f="ref" value="${esc(d.ref)}" placeholder="例如：Altair HyperMesh Help — Geometry Cleanup" autocomplete="off"></div>
+      <div class="k-f wide"><label for="ak-tags">標籤</label><input id="ak-tags" data-f="tags" value="${esc(d.tags)}" placeholder="以逗號分隔，例如：geometry, cleanup, step" autocomplete="off"></div>
+      <div class="k-f wide"><label>圖片附件 <span class="k-opt">（最多 ${AK_MAX_IMAGES} 張，會縮小後存在本機）</span></label>
+        <button type="button" class="k-drop" data-act="akPick" id="akDrop"><i class="ti ti-photo-up"></i><b>選擇圖片，或把圖片拖曳到這裡</b><small>PNG / JPG；圖片說明可在下方填寫</small></button>
+        <input type="file" id="akFile" accept="image/*" multiple hidden>
+        ${d.images.length ? `<div class="k-imgs">${d.images.map((im, i) => `<figure class="k-img"><img src="${im.url}" alt="${esc(im.caption || '附圖 ' + (i + 1))}"><button type="button" class="k-x over" data-act="akRmImg" data-i="${i}" aria-label="移除圖 ${i + 1}"><i class="ti ti-x"></i></button><input data-f="imgcap" data-i="${i}" value="${esc(im.caption)}" placeholder="圖 ${i + 1} 說明" aria-label="圖 ${i + 1} 說明"></figure>`).join('')}</div>` : ''}</div>`;
+  }
+  /* step 4: preview */
+  const key = akCategoryKey(d), info = catInfo(key), fails = d.failed.map(s => s.trim()).filter(Boolean);
+  const tags = d.tags.split(/[,，]/).map(t => t.trim()).filter(Boolean);
+  return `<div class="k-prev"><p class="k-prev-path">${KBH.icon(key)}${esc(info.path)}</p><h2>${esc(d.title)}</h2>
+      ${tags.length ? `<div class="k-tags">${tags.map(t => `<span class="k-tag">#${esc(t)}</span>`).join('')}</div>` : ''}
+      <h3>問題現象</h3><div class="prose">${md(d.symptom)}</div><h3>原因分析</h3><div class="prose">${md(d.root_cause)}</div><h3>解決方法</h3><div class="prose">${md(d.solution)}</div>
+      ${fails.length ? `<h3>試過但無效</h3><ul>${fails.map(f => `<li>${inline(esc(f))}</li>`).join('')}</ul>` : ''}
+      ${d.notes.trim() ? `<h3>備註</h3><div class="prose">${md(d.notes)}</div>` : ''}${d.ref.trim() ? `<h3>參考來源</h3><div class="prose">${md(d.ref)}</div>` : ''}
+      ${d.images.length ? `<h3>附圖（${d.images.length}）</h3><div class="k-imgs sm">${d.images.map((im, i) => `<figure class="k-img"><img src="${im.url}" alt=""><figcaption>${esc(im.caption || '圖 ' + (i + 1))}</figcaption></figure>`).join('')}</div>` : ''}</div>
+    <p class="k-hint">確認無誤後按「儲存到本機」。此為<b>原型</b>：資料只存在這個瀏覽器，不會上傳。</p>`;
+}
+function akRender(el) {
+  const last = AK.step === 4;
+  el.innerHTML = `<div class="k-addpage"><div class="k-add-card">
+    <header class="k-add-h"><h1>新增知識</h1><div class="k-proto-note"><i class="ti ti-flask"></i><span><b>本機原型</b>　儲存的資料只會留在這個瀏覽器（LocalStorage），不會上傳到 GitHub 或資料庫。待 UI 確認後再接 Supabase 做真實儲存。</span></div></header>
+    <div class="k-add-body">
+      <ol class="k-steps" aria-label="步驟">${AK_STEPS.map((s, i) => `<li class="${i + 1 === AK.step ? 'on' : i + 1 < AK.step ? 'done' : ''}"><button type="button" data-act="akGo" data-s="${i + 1}" ${i + 1 === AK.step ? 'aria-current="step"' : ''}><span class="k-sn">${i + 1 < AK.step ? '<i class="ti ti-check"></i>' : i + 1}</span>${s}</button></li>`).join('')}</ol>
+      <form class="k-form" id="akForm" novalidate><h2 class="k-form-h">${AK_STEPS[AK.step - 1]}</h2><div class="k-fields">${akStepBody()}</div></form>
+    </div>
+    <footer class="k-add-f">
+      <button type="button" class="k-link muted" data-act="akClear"${LocalStore.count() ? '' : ' disabled'}>清除本機原型資料（${LocalStore.count()}）</button><span class="spacer"></span>
+      <button type="button" class="k-btn" data-act="akCancel">取消</button>
+      ${AK.step > 1 ? `<button type="button" class="k-btn" data-act="akPrev">上一步</button>` : ''}
+      <button type="button" class="k-btn pri" data-act="${last ? 'akSave' : 'akNext'}">${last ? '<i class="ti ti-device-floppy"></i>儲存到本機（原型）' : '下一步'}</button>
+    </footer></div></div>`;
+  $('#detail').scrollTop = 0;
+}
+function akRefresh(focusSel) { akRender($('#detail')); if (focusSel) $(focusSel)?.focus(); }
+
+/* ---------- images (resized in the browser, stored as data URLs) ---------- */
+function akResize(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, 1600 / Math.max(img.width, img.height)), c = document.createElement('canvas');
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url); resolve(c.toDataURL('image/jpeg', 0.82));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('無法讀取圖片')); };
+    img.src = url;
+  });
+}
+async function akAddFiles(files) {
+  const list = [...files].filter(f => f.type.startsWith('image/'));
+  for (const f of list) {
+    if (AK.d.images.length >= AK_MAX_IMAGES) { toast(`最多 ${AK_MAX_IMAGES} 張圖片`, true); break; }
+    try { AK.d.images.push({ url: await akResize(f), caption: f.name.replace(/\.[^.]+$/, '') }); } catch (e) { toast(`${f.name}：${e.message}`, true); }
+  }
+  akRefresh();
+}
+
+/* ---------- save (PROTOTYPE: LocalStorage only) ---------- */
+function akSave() {
+  const d = AK.d, now = new Date().toISOString();
+  const entry = {
+    id: 'local-' + Date.now().toString(36), category: akCategoryKey(d), title: d.title.trim(),
+    tags: d.tags.split(/[,，]/).map(t => t.trim()).filter(Boolean),
+    symptom: d.symptom.trim(), root_cause: d.root_cause.trim(), solution: d.solution.trim(),
+    failed_attempts: d.failed.map(s => s.trim()).filter(Boolean), notes: d.notes.trim(), reference_source: d.ref.trim(),
+    images: d.images.map(im => ({ path: im.url, caption: im.caption.trim() })),
+    created_at: now, updated_at: now, _prototype: true
+  };
+  try { LocalStore.add(entry); } catch (e) { toast('瀏覽器空間不足，無法儲存（請減少圖片）', true); return; }
+  S.entries.unshift(entry);
+  akClose(true);
+  toast('已儲存到本機原型（只存在這個瀏覽器）');
+  cOpen(entry.id);
+}
+
+/* ---------- events ---------- */
+document.addEventListener('input', e => {
+  const t = e.target, f = t.dataset?.f; if (!f || C.view !== 'add' || !AK.d) return;
+  if (f === 'failed') AK.d.failed[+t.dataset.i] = t.value;
+  else if (f === 'imgcap') AK.d.images[+t.dataset.i].caption = t.value;
+  else if (f === 'root' || f === 'sub') return;
+  else { AK.d[f] = t.value; if (AK.err[f] && t.value.trim()) { delete AK.err[f]; t.removeAttribute('aria-invalid'); t.parentElement.querySelector('.k-err')?.remove(); } }
+});
+document.addEventListener('change', e => {
+  const t = e.target;
+  if (C.view !== 'add' || !AK.d) return;
+  if (t.id === 'ak-root') { AK.d.root = t.value; AK.d.sub = ''; delete AK.err.root; delete AK.err.sub; akRefresh(AK.d.root && akRootNode(AK.d.root)?.kids.length ? '#ak-sub' : '#ak-root'); }
+  else if (t.id === 'ak-sub') { AK.d.sub = t.value; delete AK.err.sub; t.removeAttribute('aria-invalid'); t.parentElement.querySelector('.k-err')?.remove(); }
+  else if (t.id === 'akFile') { akAddFiles(t.files); t.value = ''; }
+});
+document.addEventListener('dragover', e => { if (e.target.closest?.('#akDrop')) { e.preventDefault(); e.target.closest('#akDrop').classList.add('over'); } });
+document.addEventListener('dragleave', e => { e.target.closest?.('#akDrop')?.classList.remove('over'); });
+document.addEventListener('drop', e => { if (e.target.closest?.('#akDrop')) { e.preventDefault(); e.target.closest('#akDrop').classList.remove('over'); akAddFiles(e.dataTransfer.files); } });
+document.addEventListener('keydown', e => {
+  if (C.view === 'add' && e.key === 'Enter' && e.target.tagName === 'INPUT' && e.target.type !== 'file') { e.preventDefault(); actions.akNext(); }
+});
+
+Object.assign(actions, {
+  kAdd: akOpen,
+  akCancel: () => { if (akDirty() && !confirm('放棄目前輸入的內容？')) return; akClose(false); },
+  akPrev: () => { AK.step = Math.max(1, AK.step - 1); AK.err = {}; akRefresh(); },
+  akNext: () => { if (AK.step === 4) return actions.akSave(); if (!akValidate(AK.step)) { akRefresh(); $('#detail [aria-invalid="true"]')?.focus(); return; } AK.step++; AK.err = {}; akRefresh(); },
+  akGo: b => { const s = +b.dataset.s; if (s > AK.step) { for (let i = AK.step; i < s; i++) if (!akValidate(i)) { AK.step = i; akRefresh(); $('#detail [aria-invalid="true"]')?.focus(); return; } } AK.step = s; AK.err = {}; akRefresh(); },
+  akAddFail: () => { AK.d.failed.push(''); akRefresh(); $$('#akForm input[data-f="failed"]').at(-1)?.focus(); },
+  akRmFail: b => { AK.d.failed.splice(+b.dataset.i, 1); if (!AK.d.failed.length) AK.d.failed = ['']; akRefresh(); },
+  akRmImg: b => { AK.d.images.splice(+b.dataset.i, 1); akRefresh(); },
+  akPick: () => $('#akFile')?.click(),
+  akSave: () => { if (!akValidate(1)) { AK.step = 1; akRefresh(); return; } if (!akValidate(2)) { AK.step = 2; akRefresh(); return; } akSave(); },
+  akClear: () => {
+    const n = LocalStore.count(); if (!n || !confirm(`清除這個瀏覽器中 ${n} 筆本機原型資料？`)) return;
+    LocalStore.clear(); S.entries = S.entries.filter(e => !e._prototype); akRefresh(); renderSide(); toast('已清除本機原型資料');
+  }
+});
