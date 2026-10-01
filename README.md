@@ -118,8 +118,7 @@ Solution steps are written as a numbered list (`1.`, `2.`, …); figures with `s
 
 ## Phase 2 — login and saving from 新增知識
 
-Anonymous visitors still only read. A signed-in user can **add** entries and upload images. There is no edit
-in this phase (no update policy exists and the provider has no code path for it); delete comes in Phase 3.
+Anonymous visitors still only read. A signed-in user can **add** entries and upload images. Delete is Phase 3, edit is Phase 4.
 
 1. In **SQL Editor** run `supabase/phase2-auth-write.sql` (safe to re-run). It grants `insert` on `entries` to the
    `authenticated` role only with `user_id = auth.uid()`, and lets a signed-in user upload into **their own folder**
@@ -134,7 +133,15 @@ in this phase (no update policy exists and the provider has no code path for it)
 Run `supabase/phase3-delete-own.sql` in the SQL Editor (safe to re-run). A signed-in user then sees a trash button on
 the entries **they created**; it deletes the entry and its images (after a confirmation). The database allows delete only
 where `entries.user_id = auth.uid()` and only for files in the user's own `kb-images` folder, so the sample entries
-(no author) and other people's entries cannot be deleted from the site. There is still no edit.
+(no author) and other people's entries cannot be deleted from the site. 
+
+## Phase 4 — edit your own entries
+
+Run `supabase/phase4-edit-own.sql` in the SQL Editor (safe to re-run). On an entry you created, a pencil button opens the
+same four-step form filled with the entry; you can change the text, tags, category, swap / remove / add images and move
+images between sections and steps. The database allows update only where `entries.user_id = auth.uid()` and only for the
+content columns (title, category, tags, symptom, root_cause, solution, failed_attempts, notes, reference_source, images),
+so the author, id, created_at and views cannot be changed, and sample / other people's entries cannot be edited.
 
 How it is locked down: the browser only ever sends the requests listed in `RULES` in `js/provider-supabase.js`
 (anonymous reads, sign-in/refresh/logout, one `POST` to `entries`, one `POST` per image into the user's own folder);

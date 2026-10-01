@@ -4,7 +4,7 @@
    title, category, symptom, root_cause, solution, failed_attempts, notes, reference_source, tags, images.
    Save: with Supabase configured and a signed-in user the entry is inserted into the database (images go to the private
    kb-images bucket). Otherwise it is a PROTOTYPE: LocalStorage only (js/local-store.js), nothing is uploaded. */
-const AK = { step: 1, d: null, err: {}, prev: null };
+const AK = { step: 1, d: null, err: {}, prev: null, editId: null };   // editId: the entry being edited (null = new entry)
 const AK_STEPS = ['基本資訊', '內容填寫', '附圖與其他', '確認儲存'];
 const AK_MAX_IMAGES = 8;
 
@@ -32,9 +32,25 @@ function akOpen() {
   history.replaceState(null, '', location.pathname + location.search);
   renderSide(); renderDetail(true);
 }
+/* Edit one of the user's own entries: the same four-step form, filled from the entry. */
+function akPlaceFromImage(im) { return im.section ? (im.step ? im.section + ':' + im.step : im.section) : 'symptom'; }
+function akEdit(id) {
+  const e = S.entries.find(x => x.id === id);
+  if (!e || !(KBData.canDelete && KBData.canDelete(id))) return;
+  if (AK.d && akDirty() && !confirm('放棄目前輸入的內容，改為編輯這篇知識？')) return;
+  const root = KBH.tree().find(t => t.c.key === e.category || t.kids.some(k => (k.c || k).key === e.category));
+  AK.d = {
+    root: root ? root.c.key : '', sub: root && root.c.key !== e.category ? e.category : '',
+    title: e.title || '', symptom: e.symptom || '', root_cause: e.root_cause || '', solution: e.solution || '',
+    failed: (e.failed_attempts || []).length ? [...e.failed_attempts] : [''], notes: e.notes || '', ref: e.reference_source || '', tags: (e.tags || []).join(', '),
+    images: (e.images || []).map(im => ({ url: KBData.imageUrl(im.path || im.src || ''), orig: im, caption: im.caption || '', place: akPlaceFromImage(im) }))
+  };
+  AK.editId = id; AK.step = 1; AK.err = {};
+  akOpen();
+}
 function akClose(toSaved) {
   const p = AK.prev || { view: 'all' };
-  AK.d = null; AK.step = 1; AK.err = {};
+  AK.d = null; AK.step = 1; AK.err = {}; AK.editId = null;
   if (toSaved) return;
   if (p.view === 'category' && p.cat) { C.view = 'category'; C.cat = p.cat; }
   else if (p.view === 'article' && p.sel && S.entries.some(e => e.id === p.sel)) { return cOpen(p.sel); }
@@ -97,16 +113,16 @@ function akStepBody() {
       ${fails.length ? `<h3>試過但無效</h3><ul>${fails.map(f => `<li>${inline(esc(f))}</li>`).join('')}</ul>` : ''}
       ${d.notes.trim() ? `<h3>備註</h3><div class="prose">${md(d.notes)}</div>` : ''}${d.ref.trim() ? `<h3>參考來源</h3><div class="prose">${md(d.ref)}</div>` : ''}
       ${d.images.length ? `<h3>附圖（${d.images.length}）</h3><div class="k-imgs sm">${d.images.map((im, i) => `<figure class="k-img"><img src="${im.url}" alt=""><figcaption>${esc(im.caption || '圖 ' + (i + 1))}<br>放在：${esc(akPlaceLabel(im))}</figcaption></figure>`).join('')}</div>` : ''}</div>
-    <p class="k-hint">${akLive() ? '確認無誤後按「儲存到資料庫」。送出後會寫入 Supabase（目前版本只能新增，不能在介面修改或刪除）。' : '確認無誤後按「儲存到本機」。此為<b>原型</b>：資料只存在這個瀏覽器，不會上傳。'}</p>`;
+    <p class="k-hint">${AK.editId ? '確認無誤後按「儲存修改」，這篇知識會被更新。' : akLive() ? '確認無誤後按「儲存到資料庫」。送出後會寫入 Supabase（目前版本只能新增，不能在介面修改或刪除）。' : '確認無誤後按「儲存到本機」。此為<b>原型</b>：資料只存在這個瀏覽器，不會上傳。'}</p>`;
 }
 /* Real saving (Supabase, signed in) vs. the local prototype (sample data / no database configured). */
 const akLive = () => !!(KBData.canWrite && KBData.auth);
 const AK_NOTE_PROTO = '<b>本機原型</b>　儲存的資料只會留在這個瀏覽器（LocalStorage），不會上傳到 GitHub 或資料庫。';
-const akNote = () => akLive() ? `<b>儲存到資料庫</b>　登入帳號：${esc(KBData.auth.session()?.user.email || '')}。送出後會寫入 Supabase，圖片會上傳到私有的 kb-images。` : AK_NOTE_PROTO;
+const akNote = () => AK.editId ? `<b>編輯知識</b>　修改後會更新這篇文章（登入帳號：${esc(KBData.auth.session()?.user.email || '')}）。你可以調整內容、換圖或改圖片位置。` : akLive() ? `<b>儲存到資料庫</b>　登入帳號：${esc(KBData.auth.session()?.user.email || '')}。送出後會寫入 Supabase，圖片會上傳到私有的 kb-images。` : AK_NOTE_PROTO;
 function akRender(el) {
   const last = AK.step === 4;
   el.innerHTML = `<div class="k-addpage"><div class="k-add-card">
-    <header class="k-add-h"><h1>新增知識</h1><div class="k-proto-note${akLive() ? ' live' : ''}"><i class="ti ${akLive() ? 'ti-cloud-upload' : 'ti-flask'}"></i><span>${akNote()}</span></div></header>
+    <header class="k-add-h"><h1>${AK.editId ? '編輯知識' : '新增知識'}</h1><div class="k-proto-note${akLive() ? ' live' : ''}"><i class="ti ${akLive() ? 'ti-cloud-upload' : 'ti-flask'}"></i><span>${akNote()}</span></div></header>
     <div class="k-add-body">
       <ol class="k-steps" aria-label="步驟">${AK_STEPS.map((s, i) => `<li class="${i + 1 === AK.step ? 'on' : i + 1 < AK.step ? 'done' : ''}"><button type="button" data-act="akGo" data-s="${i + 1}" ${i + 1 === AK.step ? 'aria-current="step"' : ''}><span class="k-sn">${i + 1 < AK.step ? '<i class="ti ti-check"></i>' : i + 1}</span>${s}</button></li>`).join('')}</ol>
       <form class="k-form" id="akForm" novalidate><h2 class="k-form-h">${AK_STEPS[AK.step - 1]}</h2><div class="k-fields">${akStepBody()}</div></form>
@@ -115,7 +131,7 @@ function akRender(el) {
       ${akLive() ? '' : `<button type="button" class="k-link muted" data-act="akClear"${LocalStore.count() ? '' : ' disabled'}>清除本機原型資料（${LocalStore.count()}）</button>`}<span class="spacer"></span>
       <button type="button" class="k-btn" data-act="akCancel">取消</button>
       ${AK.step > 1 ? `<button type="button" class="k-btn" data-act="akPrev">上一步</button>` : ''}
-      <button type="button" class="k-btn pri" data-act="${last ? 'akSave' : 'akNext'}">${last ? (akLive() ? '<i class="ti ti-cloud-upload"></i>儲存到資料庫' : '<i class="ti ti-device-floppy"></i>儲存到本機（原型）') : '下一步'}</button>
+      <button type="button" class="k-btn pri" data-act="${last ? 'akSave' : 'akNext'}">${last ? (AK.editId ? '<i class="ti ti-device-floppy"></i>儲存修改' : akLive() ? '<i class="ti ti-cloud-upload"></i>儲存到資料庫' : '<i class="ti ti-device-floppy"></i>儲存到本機（原型）') : '下一步'}</button>
     </footer></div></div>`;
   $('#detail').scrollTop = 0;
 }
@@ -153,14 +169,27 @@ async function akSaveLive() {
   try {
     const images = [];
     for (const im of d.images) {
+      if (im.orig) { images.push({ ...im.orig, caption: im.caption.trim(), ...akPlaceField(im) }); continue; }   // already stored: keep the file
       const blob = await (await fetch(im.url)).blob();
-      images.push({ path: await KBData.uploadImage(blob), caption: im.caption.trim(), ...akPlaceField(im) });
+      const up = await KBData.uploadImage(blob); im.uploaded = up;
+      images.push({ path: up, caption: im.caption.trim(), ...akPlaceField(im) });
     }
-    const saved = await KBData.createEntry({
+    const body = {
       title: d.title.trim(), category: akCategoryKey(d), tags: d.tags.split(/[,，]/).map(t => t.trim()).filter(Boolean),
       symptom: d.symptom.trim(), root_cause: d.root_cause.trim(), solution: d.solution.trim(),
       failed_attempts: d.failed.map(s => s.trim()).filter(Boolean), notes: d.notes.trim(), reference_source: d.ref.trim(), images
-    });
+    };
+    if (AK.editId) {
+      const id = AK.editId, old = S.entries.find(x => x.id === id);
+      const kept = new Set(images.map(i => i.path).filter(Boolean));
+      const removed = ((old && old.images) || []).map(i => i.path).filter(p => p && !kept.has(p));
+      const r = await KBData.updateEntry(id, body, removed);
+      S.entries = S.entries.map(x => x.id === id ? r.entry : x);
+      akClose(true); renderSide();
+      toast(r.imagesFailed ? `已更新，但有 ${r.imagesFailed} 張舊圖片未能刪除` : '已更新', !!r.imagesFailed);
+      return cOpen(id);
+    }
+    const saved = await KBData.createEntry(body);
     S.entries.unshift(saved);
     akClose(true);
     toast('已儲存到資料庫');
@@ -214,7 +243,12 @@ document.addEventListener('keydown', e => {
 });
 
 Object.assign(actions, {
-  kAdd: () => { if (KBData.canWrite && KBData.auth && !KBData.auth.session()) return authOpen(akOpen); akOpen(); },
+  kAdd: () => {
+    if (KBData.canWrite && KBData.auth && !KBData.auth.session()) return authOpen(akOpen);
+    if (AK.editId) { if (akDirty() && !confirm('放棄目前的編輯，改為新增知識？')) return; AK.d = null; AK.editId = null; AK.step = 1; }
+    akOpen();
+  },
+  kEdit: b => akEdit(b.dataset.id),
   akCancel: () => { if (akDirty() && !confirm('放棄目前輸入的內容？')) return; akClose(false); },
   akPrev: () => { AK.step = Math.max(1, AK.step - 1); AK.err = {}; akRefresh(); },
   akNext: () => { if (AK.step === 4) return actions.akSave(); if (!akValidate(AK.step)) { akRefresh(); $('#detail [aria-invalid="true"]')?.focus(); return; } AK.step++; AK.err = {}; akRefresh(); },

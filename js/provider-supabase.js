@@ -3,7 +3,7 @@
    READ  (anonymous): `software_categories` and `entries` through the PostgREST API; stored images through short-lived
          signed URLs from the private `kb-images` bucket. No SDK is needed.
    WRITE (signed-in user only): insert one row into `entries`, upload an image into the user's OWN folder of
-         `kb-images`, and delete one of the user's OWN entries together with its images. There is no update code path.
+         `kb-images`, and edit or delete one of the user's OWN entries (and its images).
 
    Safety rules enforced here:
    - Only the browser-safe PUBLISHABLE key (sb_publishable_…) is accepted. A secret key, a service_role key or
@@ -41,6 +41,7 @@ function createSupabaseProvider(cfg) {
     { method: 'POST', path: /^\/auth\/v1\/token$/, query: /^grant_type=(password|refresh_token)$/, auth: 'none' },
     { method: 'POST', path: /^\/auth\/v1\/logout$/, auth: 'user' },
     { method: 'POST', path: /^\/rest\/v1\/entries$/, auth: 'user' },
+    { method: 'PATCH', path: /^\/rest\/v1\/entries$/, query: new RegExp(`^id=eq\\.${UUID}$`), auth: 'user' },
     { method: 'DELETE', path: /^\/rest\/v1\/entries$/, query: new RegExp(`^id=eq\\.${UUID}$`), auth: 'user' },
     { method: 'DELETE', path: new RegExp(`^/storage/v1/object/${BUCKET}/${UUID}/${UUID}\\.(jpg|png)$`), auth: 'user' },
     { method: 'POST', path: new RegExp(`^/storage/v1/object/${BUCKET}/${UUID}/${UUID}\\.(jpg|png)$`), auth: 'user' }
@@ -184,6 +185,25 @@ function createSupabaseProvider(cfg) {
       const row = normalizeEntry(Array.isArray(saved) ? saved[0] : saved);
       mine.add(row.id);
       return row;
+    },
+    /* Updates the content of one of the user's own entries (never the author). `removedPaths` are images the user took
+       out; they are deleted from storage after the row was saved. Returns { entry, imagesFailed }. */
+    async updateEntry(id, entry, removedPaths = []) {
+      if (!session) throw Object.assign(new Error('請先登入'), { status: 401 });
+      const body = {
+        title: entry.title, category: entry.category, tags: entry.tags || [], symptom: entry.symptom || '', root_cause: entry.root_cause || '', solution: entry.solution || '',
+        failed_attempts: entry.failed_attempts || [], notes: entry.notes || '', reference_source: entry.reference_source || '', images: entry.images || []
+      };
+      const res = await guardedFetch(`${origin}/rest/v1/entries?id=eq.${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(body) });
+      if (!res.ok) throw Object.assign(new Error(res.status === 401 || res.status === 403 ? '沒有修改權限，請確認已登入' : `儲存失敗（HTTP ${res.status}）`), { status: res.status });
+      const saved = await res.json();
+      if (!saved.length) throw Object.assign(new Error('只能修改自己新增的知識'), { status: 403 });
+      let imagesFailed = 0;
+      for (const p of removedPaths) {
+        if (!p || !p.startsWith(session.user.id + '/')) continue;
+        try { const r = await guardedFetch(`${origin}/storage/v1/object/${BUCKET}/${p}`, { method: 'DELETE' }); if (!r.ok) imagesFailed++; } catch (e) { imagesFailed++; }
+      }
+      return { entry: normalizeEntry(saved[0]), imagesFailed };
     },
     /* Deletes one of the user's own entries, then its images. Resolves { imagesFailed }. */
     async deleteEntry(entry) {
