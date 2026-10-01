@@ -16,14 +16,13 @@ references, and carries engineering figures with captions linked to the section 
 
 ## Status
 
-- **Local static data.** All content comes from `data/knowledge-base.json`; the sample article is
-  "STEP 匯入後幾何破面，free edges 無法補面". Its figures are generated illustrations, marked **MOCK · 示意圖**
-  inside each image.
-- **No database yet.** V4 makes no database, authentication, or storage calls and contains no credentials.
-  Connecting Supabase is planned for a later step (see below).
-- **新增知識 is a local prototype.** The four-step form (基本資訊 → 內容填寫 → 附圖與其他 → 確認儲存) produces
+- **Two data sources.** By default V4 reads the local sample data (`data/knowledge-base.json`). When `js/config.js` holds a
+  Supabase Project URL and **publishable** key, V4 reads categories, entries and images from Supabase instead
+  (**read-only**, see "Supabase" below). `?source=local` forces the local data.
+- **No login, no writes.** The site only reads. It never contains a secret key, service_role key or database password.
+- **新增知識 is still a local prototype.** The four-step form (基本資訊 → 內容填寫 → 附圖與其他 → 確認儲存) produces
   an entry in the normal knowledge schema, but "save" only writes to this browser's LocalStorage
-  (`js/local-store.js`). Nothing is uploaded; entries are marked **本機原型**.
+  (`js/local-store.js`). Nothing is uploaded; entries are marked **本機原型**. Real saving comes with the login phase.
 
 ## Run locally
 
@@ -55,7 +54,10 @@ The sample article can be shown in different states through the URL:
 ```
 index.html            page shell
 css/styles.css        styles
-js/data-provider.js   the only file that knows where data comes from (local JSON today)
+js/config.js          Supabase Project URL + publishable key (empty = local data)
+js/data-provider.js   picks the data source; the UI only talks to KBData
+js/provider-local.js  local sample data (JSON)
+js/provider-supabase.js  read-only Supabase provider
 js/core.js            state, software-category helpers, text / markdown helpers
 js/figures.js         figure model, article page, figure gallery, lightbox
 js/local-store.js     PROTOTYPE: browser-local storage for 新增知識
@@ -63,6 +65,7 @@ js/ui.js              header, category sidebar, landing / category / search page
 js/add-knowledge.js   PROTOTYPE: the 新增知識 form
 js/main.js            start-up
 data/                 knowledge-base.json (+ qa-long-article.json for ?long=1)
+supabase/             schema.sql and seed.sql for a new V4 project
 assets/brand/         Lenovo logo + hero background photo
 assets/icons/         HyperMesh and LS-DYNA software icons (original files, unchanged)
 assets/figures/       the sample article's illustrative (mock) figures, SVG
@@ -72,7 +75,7 @@ scripts/serve.mjs     zero-dependency static dev server
 The UI reads data only through `KBData` in `js/data-provider.js`:
 
 ```
-UI  →  KBData.load() / prepareImages() / imageUrl()  →  data/knowledge-base.json (for now)
+UI  →  KBData.load() / prepareImages() / imageUrl()  →  Supabase (if configured)  |  data/knowledge-base.json
 ```
 
 ### Data shape
@@ -91,12 +94,30 @@ UI  →  KBData.load() / prepareImages() / imageUrl()  →  data/knowledge-base.
 
 Solution steps are written as a numbered list (`1.`, `2.`, …); figures with `step: n` attach to step *n*.
 
-## Connecting a database later
+## Supabase (read-only)
 
-Replace the body of `js/data-provider.js` with an implementation of the same three functions
-(`load`, `prepareImages`, `imageUrl`) that returns data in the shape above, and make the 新增知識 form call the
-provider instead of `LocalStore` (then delete `js/local-store.js`). Keep credentials out of the repository
-(use environment-specific configuration that is not committed).
+1. Create a **new** Supabase project for V4. (The V2 production and V3 development projects are blocked in
+   `js/provider-supabase.js` so V4 cannot be pointed at them by accident.)
+2. In **SQL Editor** run `supabase/schema.sql`, then `supabase/seed.sql` (sample data). Both are safe to re-run.
+   They create the tables, a private `kb-images` bucket and **read-only** public policies — there is no
+   insert / update / delete policy yet, so nobody can write through the API.
+3. Copy the **Project URL** and the **publishable key** (`sb_publishable_…`, Project Settings → API Keys) into
+   `js/config.js`. The publishable key is public by design. **Never** put a secret key, a `service_role` key or the
+   database password in this repository — the provider refuses anything that is not a publishable key.
+4. Open the site. `document.documentElement.dataset.source` is `supabase` when the connection is used.
+
+`supabase/seed.sql` is generated from the local sample data: `npm run seed:build`.
+
+### How the data maps
+
+- `software_categories` and `entries` have the columns listed under "Data shape".
+- `entries.images` is JSON: each item is `{ "path": "<object path in kb-images>" }` (private bucket, shown through
+  short-lived signed URLs) or `{ "src": "<static url>" }`, and may add `caption`, `title`, `section`, `step`,
+  `order`, `key` so a figure attaches to a section / step exactly like the local sample.
+
+### Next phase (not built yet)
+
+Email/password login, saving from 新增知識 (insert policies, image upload), and turning off public sign-ups.
 
 ## Software icons
 

@@ -5,16 +5,15 @@ const SEC = { symptom: ['問題現象', 0], root_cause: ['原因分析', 1], sol
 
 const CI = { figs: [] };
 
-/* Figures of an entry. Entries with a `figures` list carry an explicit section / step mapping;
-   entries with only stored `images` (no mapping yet) attach their pictures to the problem section. */
+/* Figures of an entry. Entries with a `figures` list (local data) or images that carry section / step fields
+   (Supabase) are placed by that mapping; plain stored images attach to the problem section. */
 function cFigs(e) {
-  if (e.figures) {
-    const so = s => SEC[s][1], st = s => s === 'v' ? 99 : s;
-    return e.figures.map(f => ({ ...f, sec: f.section, pri: f.order }))
-      .sort((a, b) => so(a.sec) - so(b.sec) || st(a.step) - st(b.step) || a.pri - b.pri)
-      .map((f, i) => ({ ...f, n: i + 1 }));
-  }
-  return (e.images || []).map((im, i) => ({ n: i + 1, sec: 'symptom', step: 0, key: i === 0, path: im.path, title: im.caption || `圖片 ${i + 1}`, caption: im.caption || '' }));
+  const so = s => (SEC[s] || SEC.symptom)[1], st = s => s === 'v' ? 99 : (+s || 0);
+  const list = e.figures
+    ? e.figures.map(f => ({ ...f, sec: f.section, pri: f.order }))
+    /* stored images: an item may also carry section / step / title / order (key = lead picture of a section) */
+    : (e.images || []).map((im, i) => ({ path: im.path, src: im.src, mock: !!im.mock, key: im.key ?? i === 0, sec: im.section || 'symptom', step: im.step ?? 0, pri: im.order ?? i, title: im.title || im.caption || `圖片 ${i + 1}`, caption: im.caption || '' }));
+  return list.sort((a, b) => so(a.sec) - so(b.sec) || st(a.step) - st(b.step) || a.pri - b.pri).map((f, i) => ({ ...f, n: i + 1 }));
 }
 
 const stepLabel = f => f.sec === 'solution' && f.step ? (f.step === 'v' ? '驗證' : `Step ${f.step}`) : '';
