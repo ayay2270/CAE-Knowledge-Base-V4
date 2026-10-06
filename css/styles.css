@@ -477,3 +477,21 @@ body.c-lb-open{overflow:hidden}
 @media(max-width:900px){.k-layout{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}.k-side{padding:8px 12px}.k-n{min-height:36px}.c-page-wrap{grid-template-columns:minmax(0,1fr);padding:22px 20px}.k-page{padding:16px 20px}.k-row{grid-template-columns:30px minmax(0,1fr) 14px}.k-rm{display:none}.k-top{padding:0 12px;gap:12px}.k-steps{gap:4px;padding:10px}.k-steps button{flex-direction:column;font-size:11px;text-align:center;padding:8px 4px}.k-steps li{flex:1}.k-hero{height:auto;min-height:208px;padding:20px}.k-hero h1{font-size:26px}}
 @media(max-width:600px){.k-page{padding:12px}.k-hero{padding:20px 14px}.k-hero h1{font-size:24px}.k-examples{font-size:11px;gap:4px}.k-hsearch{padding:0 10px}.k-hsearch input{font-size:13px}.k-brand .k-logo{height:26px}.c-search .kbd{display:none}.c-article h1{font-size:24px}.c-inline-figs{grid-template-columns:minmax(0,1fr)}.c-related button{grid-template-columns:minmax(0,1fr) 16px;gap:8px}.c-related small{display:none}.k-form{padding:20px 16px}.k-add-h,.k-add-f{padding:16px}.k-lh{gap:6px}.k-sort{font-size:12px}.k-rt{font-size:14px}.k-row{gap:10px}.k-steps{overflow:visible}.c-lb-stage{grid-template-columns:36px minmax(0,1fr) 36px}.c-lb-tag{display:none}.c-lb-strip{justify-content:flex-start}}
 @media(prefers-reduced-motion:reduce){.k-main{scroll-behavior:auto}}
+
+/* Article-only desktop workspace: wide media, readable paragraphs, compact TOC. */
+@media(min-width:901px){
+  .c-page-wrap:has(> .c-article){width:100%;max-width:none;margin:0;grid-template-columns:minmax(0,1fr) 200px;gap:24px;padding:24px 24px 90px;justify-content:stretch}
+  .c-article .prose{max-width:860px}
+  .c-article h1{max-width:1100px}
+  .c-article .c-sb{min-width:0}
+  .c-article .c-inline-figs{max-width:none}
+  .c-article .c-inline-figs.one{grid-template-columns:minmax(0,1200px)}
+  .c-article .c-inline-thumb img{max-height:640px}
+  .c-toc-in{padding-top:0;top:24px}
+}
+@media(min-width:901px) and (max-width:1599px){
+  .c-page-wrap:has(> .c-article){grid-template-columns:minmax(0,1fr) 190px;gap:20px;padding-inline:20px}
+}
+@media(min-width:901px) and (max-width:1199px){
+  .c-page-wrap:has(> .c-article){grid-template-columns:minmax(0,1fr) 170px;gap:16px}
+}
