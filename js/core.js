@@ -223,6 +223,7 @@ const KBH = {
     const q = $('#q');
     if (!q) return;
     let t;
+    window.addEventListener('popstate', () => clearTimeout(t));
     q.addEventListener('input', () => { clearTimeout(t); t = setTimeout(() => { S.q = q.value; onSearch(); }, 120); });
     q.addEventListener('keydown', e => { if (e.key === 'Escape') { q.value = ''; S.q = ''; onSearch(); q.blur(); } });
   },

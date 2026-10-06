@@ -34,12 +34,12 @@ function wireUi() {
   /* landing-page search + sort (delegated: these elements are re-created on every render) */
   document.addEventListener('input', e => {
     if (e.target.id !== 'qHero') return;
-    clearTimeout(C.ht); C.ht = setTimeout(() => { C.hq = e.target.value; C.searchCat = 'all'; kAllList(); }, 120);
+    clearTimeout(C.ht); C.ht = setTimeout(() => { C.hq = e.target.value; C.searchCat = 'all'; kAllList(); cRemember(); }, 120);
   });
   document.addEventListener('keydown', e => { if (e.target.id === 'qHero' && e.key === 'Enter') { clearTimeout(C.ht); C.hq = e.target.value; S.q = C.hq; $('#q').value = S.q; C.searchCat = 'all'; actions.cSearchPage(); } if (e.target.id === 'qHero' && e.key === 'Escape') { e.target.value = ''; C.hq = ''; kAllList(); } });
-  document.addEventListener('change', e => { if (e.target.id === 'kSort') { S.sort = e.target.value; kRefreshList(); } });
+  document.addEventListener('change', e => { if (e.target.id === 'kSort') { S.sort = e.target.value; kRefreshList(); cRemember(); } });
 }
-function onSearch() { C.drop = -1; C.searchCat = 'all'; if (C.view === 'search') { cDropClose(); renderDetail(); } else cDrop(); }
+function onSearch() { C.drop = -1; C.searchCat = 'all'; if (C.view === 'search') { cDropClose(); renderDetail(); cRemember(); } else cDrop(); }
 function cDropClose() { $('#cDrop')?.classList.add('hidden'); $('#q')?.setAttribute('aria-expanded', 'false'); }
 function cDrop() {
   const el = $('#cDrop'); if (!el) return;
@@ -156,13 +156,67 @@ function cSearchPage(el) {
 }
 function cCrumb(items) { return `<nav class="c-crumb" aria-label="位置">${items.map((x, i) => i < items.length - 1 ? `<button data-act="${x.act}" data-k="${esc(x.k || '')}">${esc(x.t)}</button><i class="ti ti-chevron-right"></i>` : `<span>${esc(x.t)}</span>`).join('')}</nav>`; }
 
+/* History snapshots belong to entries, not renders. Restoration never pushes. */
+function cSnapshot() {
+  return { kbNav: 1, view: C.view, cat: C.cat, id: S.sel, q: S.q, hq: C.hq,
+    searchCat: C.searchCat, sort: S.sort, filter: S.filter, tag: S.tag,
+    scroll: $('#detail')?.scrollTop || 0 };
+}
+function cRouteUrl(state) {
+  const base = location.pathname + location.search;
+  if (state.view === 'article') return base + '#' + encodeURIComponent(state.id);
+  if (state.view === 'category') return base + '#cat/' + encodeURIComponent(state.cat);
+  if (state.view === 'search') return base + '#search/' + encodeURIComponent(state.q || '');
+  return base;
+}
+function cRemember() {
+  if (!C.historyReady || !['all', 'category', 'article', 'search'].includes(C.view)) return;
+  const state = cSnapshot();
+  history.replaceState(state, '', cRouteUrl(state));
+}
+function cFromUrl() {
+  let hash; try { hash = decodeURIComponent(location.hash.slice(1)); } catch { hash = ''; }
+  if (hash.startsWith('cat/') && cCatNode(hash.slice(4))) return { view: 'category', cat: hash.slice(4) };
+  if (hash.startsWith('search/')) return { view: 'search', q: hash.slice(7) };
+  if (S.entries.some(e => e.id === hash)) return { view: 'article', id: hash };
+  return { view: 'all' };
+}
+function cRestore(state) {
+  clearTimeout(C.ht);
+  const route = state?.kbNav === 1 ? state : cFromUrl();
+  C.view = ['all', 'category', 'article', 'search'].includes(route.view) ? route.view : 'all';
+  C.cat = route.cat || null;
+  S.sel = route.id || null;
+  if (C.view === 'category' && !cCatNode(C.cat)) C.view = 'all';
+  const entry = S.entries.find(e => e.id === S.sel);
+  if (C.view === 'article' && !entry) C.view = 'all';
+  C.root = entry ? cRootOf(entry) : null;
+  S.gi = 0; S.q = route.q || ''; C.hq = route.hq || '';
+  C.searchCat = route.searchCat || 'all'; S.sort = route.sort || 'new';
+  S.filter = route.filter || 'all'; S.tag = route.tag || null;
+  $('#q').value = S.q; cDropClose();
+  renderSide(); renderDetail(true);
+  $('#detail').scrollTop = route.scroll || 0; cSpy();
+}
+function cNavigate(route) {
+  clearTimeout(C.ht);
+  const previous = cSnapshot();
+  cRemember();
+  const next = { ...previous, ...route, kbNav: 1, scroll: 0 };
+  const same = previous.view === next.view && previous.cat === next.cat && previous.id === next.id &&
+    (next.view !== 'search' || (previous.q === next.q && previous.searchCat === next.searchCat));
+  if (same) history.replaceState(next, '', cRouteUrl(next));
+  else history.pushState(next, '', cRouteUrl(next));
+  cRestore(next);
+}
+window.addEventListener('popstate', event => {
+  if (C.historyReady) cRestore(event.state);
+});
+
 /* ---------- article open / render dispatch ---------- */
 function cOpen(id) {
   const e = S.entries.find(x => x.id === id); if (!e) return;
-  S.sel = id; S.gi = 0; C.view = 'article'; C.root = cRootOf(e);
-  history.replaceState(null, '', '#' + id);
-  cDropClose();
-  renderSide(); renderDetail(true);
+  cNavigate({ view: 'article', id, cat: null });
 }
 function renderDetail(resetScroll) {
   const el = $('#detail'); if (!el) return;
@@ -191,17 +245,13 @@ function cSpy() {
 
 /* First view: an article or category named in the URL hash, otherwise 所有文章. */
 function afterLoad() {
-  const h = decodeURIComponent(location.hash.slice(1));
-  if (h.startsWith('cat/') && (cCatNode(h.slice(4)))) { C.view = 'category'; C.cat = h.slice(4); }
-  else if (h && S.entries.some(e => e.id === h)) return cOpen(h);
-  renderSide(); renderDetail(true);
+  cRestore(history.state);
+  C.historyReady = true;
+  cRemember();
 }
 
 function cGo(view, cat) {
-  clearTimeout(C.ht); if (view === 'all') { C.hq = ''; S.q = ''; $('#q').value = ''; } C.searchCat = 'all';
-  C.view = view; C.cat = cat || null; S.sel = null; cDropClose();
-  history.replaceState(null, '', view === 'category' ? '#cat/' + cat : location.pathname + location.search);
-  renderSide(); renderDetail(true);
+  cNavigate({ view, cat: cat || null, id: null, searchCat: 'all', ...(view === 'all' ? { hq: '', q: '' } : {}) });
 }
 Object.assign(actions, {
   cHome: () => cGo('all'),
@@ -215,9 +265,9 @@ Object.assign(actions, {
     main.scrollTo({ top, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
     cSpy();
   },
-  kSearchCat: b => { C.searchCat = b.dataset.k; if (C.view === 'all') kAllList(); else renderDetail(); },
+  kSearchCat: b => { C.searchCat = b.dataset.k; if (C.view === 'all') kAllList(); else renderDetail(); cRemember(); },
   kHeroSearch: () => { clearTimeout(C.ht); C.hq = $('#qHero').value; S.q = C.hq; $('#q').value = S.q; C.searchCat = 'all'; actions.cSearchPage(); },
-  kExample: b => { S.q = b.dataset.q; $('#q').value = S.q; C.searchCat = 'all'; actions.cSearchPage(); },
-  cSearchPage: () => { C.view = 'search'; S.sel = null; cDropClose(); renderSide(); renderDetail(true); },
-  dtag: b => { $('#q').value = b.dataset.t; S.q = b.dataset.t; C.view = 'search'; S.sel = null; renderSide(); renderDetail(true); }
+  kExample: b => cNavigate({ view: 'search', id: null, cat: null, q: b.dataset.q, searchCat: 'all' }),
+  cSearchPage: () => cNavigate({ view: 'search', id: null, cat: null, q: $('#q').value, searchCat: 'all' }),
+  dtag: b => cNavigate({ view: 'search', id: null, cat: null, q: b.dataset.t, searchCat: 'all' })
 });
