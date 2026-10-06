@@ -402,6 +402,12 @@ body.c-lb-open{overflow:hidden}
 .k-side-h{font-size:12px;letter-spacing:0;margin-bottom:8px}
 .k-n{border-radius:5px;min-height:38px;margin-bottom:2px}
 .k-kid::before{display:none}
+@media(min-width:901px){
+  .k-kid::before{display:block;left:21px;top:-2px;bottom:50%;width:0;border-left:1px solid #C5D0DD;border-bottom:0;border-radius:0;pointer-events:none}
+  .k-kid:has(+ .k-kid)::before{bottom:-2px}
+  .k-root + .k-kid::before{top:-8px}
+  .k-kid::after{content:"";position:absolute;left:21px;top:50%;width:12px;border-top:1px solid #C5D0DD;pointer-events:none}
+}
 .k-main{scroll-behavior:smooth;overscroll-behavior:contain}
 .k-page{width:100%;max-width:none;margin:0;padding:24px clamp(20px,2vw,32px) 72px}
 .k-hero{height:208px;min-height:0;border:0;border-radius:7px;margin:0 0 26px;padding:22px 30px;color:#fff;text-align:center;background:#142c48}
