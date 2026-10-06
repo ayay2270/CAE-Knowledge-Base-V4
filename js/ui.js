@@ -1,13 +1,13 @@
 /* User interface shell: header, category sidebar, all-articles page, category pages, search results.
    The article page itself (reading view, figures, lightbox) lives in figures.js. */
-const C = { view: 'all', cat: null, root: null, drop: -1, hq: '' };
+const C = { view: 'all', cat: null, root: null, drop: -1, hq: '', searchCat: 'all' };
 
 function appMarkup() {
   return `<div class="app c-app" id="app">
   <header class="k-top">
     <button class="k-brand" data-act="cHome" aria-label="CAE Knowledge Base — 所有文章"><img class="k-logo" src="assets/brand/lenovo-logo.png" alt="Lenovo"><span>CAE Knowledge Base</span></button>
     <div class="c-search" id="searchWrap">
-      <i class="ti ti-search" aria-hidden="true"></i><input id="q" placeholder="搜尋錯誤碼、現象、關鍵字… 例如：free edges、ERROR 1953、negative volume" autocomplete="off" role="combobox" aria-label="搜尋知識" aria-expanded="false" aria-controls="cDrop"><span class="kbd">${KBH.kbd}</span>
+      <i class="ti ti-search" aria-hidden="true"></i><input id="q" placeholder="搜尋問題、錯誤碼或關鍵字…" autocomplete="off" role="combobox" aria-label="搜尋知識" aria-expanded="false" aria-controls="cDrop" aria-autocomplete="list"><span class="kbd">${KBH.kbd}</span>
       <div class="c-drop hidden" id="cDrop" role="listbox"></div>
     </div>
     <span class="spacer"></span>
@@ -27,19 +27,19 @@ function wireUi() {
   q.addEventListener('keydown', e => {
     const items = $$('#cDrop .c-dopt');
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { if (!items.length) return; e.preventDefault(); C.drop = (C.drop + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length; items.forEach((x, i) => x.classList.toggle('kb', i === C.drop)); }
-    if (e.key === 'Enter') { e.preventDefault(); const it = items[Math.max(0, C.drop)]; if (it) it.click(); }
+    if (e.key === 'Enter') { e.preventDefault(); S.q = q.value; C.searchCat = 'all'; const it = C.drop >= 0 ? items[C.drop] : null; if (it) it.click(); else actions.cSearchPage(); }
   });
   document.addEventListener('click', e => { if (!e.target.closest('#searchWrap')) cDropClose(); });
   $('#detail').addEventListener('scroll', cSpy, { passive: true });
   /* landing-page search + sort (delegated: these elements are re-created on every render) */
   document.addEventListener('input', e => {
     if (e.target.id !== 'qHero') return;
-    clearTimeout(C.ht); C.ht = setTimeout(() => { C.hq = e.target.value; kAllList(); }, 120);
+    clearTimeout(C.ht); C.ht = setTimeout(() => { C.hq = e.target.value; C.searchCat = 'all'; kAllList(); }, 120);
   });
-  document.addEventListener('keydown', e => { if (e.target.id === 'qHero' && e.key === 'Escape') { e.target.value = ''; C.hq = ''; kAllList(); } });
+  document.addEventListener('keydown', e => { if (e.target.id === 'qHero' && e.key === 'Enter') { clearTimeout(C.ht); C.hq = e.target.value; S.q = C.hq; $('#q').value = S.q; C.searchCat = 'all'; actions.cSearchPage(); } if (e.target.id === 'qHero' && e.key === 'Escape') { e.target.value = ''; C.hq = ''; kAllList(); } });
   document.addEventListener('change', e => { if (e.target.id === 'kSort') { S.sort = e.target.value; kRefreshList(); } });
 }
-function onSearch() { C.drop = -1; cDrop(); }
+function onSearch() { C.drop = -1; C.searchCat = 'all'; if (C.view === 'search') { cDropClose(); renderDetail(); } else cDrop(); }
 function cDropClose() { $('#cDrop')?.classList.add('hidden'); $('#q')?.setAttribute('aria-expanded', 'false'); }
 function cDrop() {
   const el = $('#cDrop'); if (!el) return;
@@ -97,35 +97,36 @@ function renderList() { renderSide(); }
 /* ---------- article rows ---------- */
 /* noCat: inside a group the heading already names the category */
 function kRow(e, hl, noCat) {
-  const p = catInfo(e.category), tags = (e.tags || []).slice(0, 4).map(t => `<span class="k-tag">${esc(t)}</span>`).join('');
-  return `<button class="k-row g-${p.group}" data-act="cOpen" data-id="${e.id}">
+  const p = catInfo(e.category);
+  return `<button class="k-row g-${p.group}" data-act="cOpen" data-id="${esc(e.id)}">
     <span class="k-ico">${KBH.icon(e.category)}</span>
-    <span class="k-rb">${noCat && !e._prototype ? '' : `<span class="k-rc">${noCat ? '' : esc(p.label)}${e._prototype ? '<b class="k-proto">本機原型</b>' : ''}</span>`}<span class="k-rt">${hl ? KBH.hl(e.title) : esc(e.title)}</span><span class="k-rs">${hl ? KBH.hl(KBH.snippet(e, 130)) : esc(kPlainSnippet(e, 130))}</span></span>
-    <span class="k-rm"><span class="k-tags">${tags}</span><time datetime="${esc(e.updated_at)}">${fmtDate(e.updated_at)}</time></span>
+    <span class="k-rb"><span class="k-rc">${esc(p.label)}${e._prototype ? '<b class="k-proto">本機原型</b>' : ''}</span><span class="k-rt">${hl ? KBH.hl(e.title) : esc(e.title)}</span><span class="k-rs">${hl ? KBH.hl(KBH.snippet(e, 170)) : esc(kPlainSnippet(e, 170))}</span></span>
+    <span class="k-rm"><time datetime="${esc(e.updated_at)}">${fmtDate(e.updated_at)}</time></span>
     <i class="ti ti-chevron-right k-chev" aria-hidden="true"></i></button>`;
 }
 const kSortSel = () => `<label class="k-sort">排序：<select id="kSort" aria-label="排序"><option value="new" ${S.sort !== 'title' ? 'selected' : ''}>最新更新</option><option value="title" ${S.sort === 'title' ? 'selected' : ''}>標題</option></select></label>`;
 
 /* ---------- 所有文章 (landing) ---------- */
 function cAll(el) {
-  el.innerHTML = `<div class="k-page"><section class="k-hero"><h1>CAE Knowledge Base</h1><p>快速找到曾經解決過的 CAE 問題</p>
-      <label class="k-hsearch"><i class="ti ti-search" aria-hidden="true"></i><input id="qHero" type="search" placeholder="搜尋錯誤碼、現象、關鍵字… 例如：free edges、ERROR 1953、negative volume" autocomplete="off" aria-label="搜尋所有文章" value="${esc(C.hq)}"></label></section>
+  el.innerHTML = `<div class="k-page"><section class="k-hero"><h1>CAE Knowledge Base</h1><p>記錄・分享・累積 CAE 工程經驗</p>
+      <label class="k-hsearch"><i class="ti ti-search" aria-hidden="true"></i><input id="qHero" type="search" placeholder="搜尋問題、錯誤碼或關鍵字…" autocomplete="off" aria-label="搜尋所有文章" value="${esc(C.hq)}"><button data-act="kHeroSearch" aria-label="搜尋"><i class="ti ti-arrow-right" aria-hidden="true"></i></button></label><div class="k-examples">例如：${["penetration", "warped element", "ERROR 1953", "negative volume"].map(t => `<button data-act="kExample" data-q="${t}">${t}</button>`).join("<span>・</span>")}</div></section>
     <div id="kList"></div></div>`;
   kAllList();
+}
+function kResultList(arr, query) {
+  const selected = C.searchCat || 'all';
+  const groups = KBH.leaves().map(({c}) => ({c, count: arr.filter(e => e.category === c.key).length})).filter(g => g.count);
+  const items = selected === 'all' ? arr : arr.filter(e => e.category === selected);
+  const old = S.q; S.q = query;
+  const html = `<div class="k-search-tabs" role="group" aria-label="依軟體查看搜尋結果"><button class="${selected === 'all' ? 'on' : ''}" data-act="kSearchCat" data-k="all" aria-pressed="${selected === 'all'}">全部 (${arr.length})</button>${groups.map(({c,count}) => `<button class="${selected === c.key ? 'on' : ''}" data-act="kSearchCat" data-k="${esc(c.key)}" aria-pressed="${selected === c.key}">${esc(c.label)} (${count})</button>`).join('')}</div><div class="k-results" aria-live="polite">${items.length ? items.map(e => kRow(e,true)).join('') : '<p class="k-none">找不到符合的文章。試著只輸入錯誤代碼或一個關鍵字。</p>'}</div>`;
+  S.q = old; return html;
 }
 function kAllList() {
   const box = $('#kList'); if (!box) return;
   const q = C.hq.trim();
-  if (q) {
-    const arr = kSearch(q);
-    box.innerHTML = `<div class="k-lh"><h2>搜尋結果</h2><small>「${esc(q)}」共 ${arr.length} 筆</small></div>` +
-      (arr.length ? arr.map(e => { const s = S.q; S.q = q; const h = kRow(e, true); S.q = s; return h; }).join('') : `<p class="k-none">找不到符合的文章。試著只輸入錯誤代碼或一個關鍵字。</p>`);
-    return;
-  }
-  const groups = KBH.leaves().map(({ c }) => ({ c, items: kSorted(S.entries.filter(e => e.category === c.key)) }));
-  if (cOrphans().length) groups.push({ c: C_OTHER, items: kSorted(cOrphans()) });
-  box.innerHTML = `<div class="k-lh"><h2>所有文章</h2><small>共 ${S.entries.length} 篇知識</small>${kSortSel()}</div>` +
-    groups.filter(g => g.items.length).map(g => `<section class="k-group" aria-label="${esc(g.c.label)}"><h3 class="k-gh">${KBH.icon(g.c.key)}${esc(g.c.label)}<em>${g.items.length}</em></h3>${g.items.map(e => kRow(e, false, true)).join('')}</section>`).join('');
+  if (q) { const arr = kSearch(q); box.innerHTML = `<div class="k-lh"><h2>搜尋結果</h2><small>「${esc(q)}」・${arr.length} 篇</small></div>` + kResultList(arr,q); }
+  else box.innerHTML = `<div class="k-lh"><h2>所有文章</h2><small>${S.entries.length} 篇知識</small>${kSortSel()}</div>` + kSorted(S.entries).map(e => kRow(e)).join('');
+  hydrate(box);
 }
 function kRefreshList() { if (C.view === 'all') kAllList(); else if (C.view === 'category') kCatList(); }
 
@@ -150,10 +151,8 @@ function kCatList() {
 
 /* ---------- search results page ---------- */
 function cSearchPage(el) {
-  const f = S.filter; S.filter = 'all'; const arr = visible(); S.filter = f;
-  el.innerHTML = `<div class="k-page">${cCrumb([{ t: '所有文章', act: 'cHome' }, { t: '搜尋結果' }])}
-    <div class="k-lh"><h2>搜尋「${esc(S.q.trim())}」</h2><small>${arr.length} 筆結果</small></div>
-    ${arr.length ? arr.map(e => kRow(e, true)).join('') : `<p class="k-none">找不到符合的文章。試著只輸入錯誤代碼或一個關鍵字。</p>`}</div>`;
+  const arr = kSearch(S.q);
+  el.innerHTML = `<div class="k-page">${cCrumb([{t:'所有文章',act:'cHome'},{t:'搜尋結果'}])}<div class="k-lh"><h1 class="k-search-title">搜尋「${esc(S.q.trim())}」</h1><small>${arr.length} 篇結果</small></div>${kResultList(arr,S.q)}</div>`;
 }
 function cCrumb(items) { return `<nav class="c-crumb" aria-label="位置">${items.map((x, i) => i < items.length - 1 ? `<button data-act="${x.act}" data-k="${esc(x.k || '')}">${esc(x.t)}</button><i class="ti ti-chevron-right"></i>` : `<span>${esc(x.t)}</span>`).join('')}</nav>`; }
 
@@ -178,7 +177,7 @@ function renderDetail(resetScroll) {
   else if (C.view === 'search') cSearchPage(el);
   else cAll(el);
   hydrate(el);
-  if (resetScroll) el.scrollTop = 0;
+  if (resetScroll) { C.spyTarget = null; el.scrollTop = 0; }
   cSpy();
 }
 
@@ -186,6 +185,7 @@ function cSpy() {
   const main = $('#detail'); const links = $$('.c-toc a[data-act="cJump"]'); if (!links.length) return;
   let cur = links[0].dataset.t;
   for (const a of links) { const s = document.getElementById(a.dataset.t); if (s && s.getBoundingClientRect().top - main.getBoundingClientRect().top < 120) cur = a.dataset.t; }
+  if (C.spyTarget && Math.abs(main.scrollTop - C.spyTarget.top) < 2) cur = C.spyTarget.id;
   links.forEach(a => a.classList.toggle('on', a.dataset.t === cur));
 }
 
@@ -198,6 +198,7 @@ function afterLoad() {
 }
 
 function cGo(view, cat) {
+  clearTimeout(C.ht); if (view === 'all') { C.hq = ''; S.q = ''; $('#q').value = ''; } C.searchCat = 'all';
   C.view = view; C.cat = cat || null; S.sel = null; cDropClose();
   history.replaceState(null, '', view === 'category' ? '#cat/' + cat : location.pathname + location.search);
   renderSide(); renderDetail(true);
@@ -206,7 +207,17 @@ Object.assign(actions, {
   cHome: () => cGo('all'),
   cCat: b => cGo('category', b.dataset.k),
   cOpen: b => cOpen(b.dataset.id),
-  cJump: b => { document.getElementById(b.dataset.t)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); },
+  cJump: b => {
+    const section = document.getElementById(b.dataset.t), main = $('#detail');
+    if (!section) return;
+    const top = Math.max(0, Math.min(main.scrollHeight - main.clientHeight, main.scrollTop + section.getBoundingClientRect().top - main.getBoundingClientRect().top - 24));
+    C.spyTarget = { id: b.dataset.t, top };
+    main.scrollTo({ top, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+    cSpy();
+  },
+  kSearchCat: b => { C.searchCat = b.dataset.k; if (C.view === 'all') kAllList(); else renderDetail(); },
+  kHeroSearch: () => { clearTimeout(C.ht); C.hq = $('#qHero').value; S.q = C.hq; $('#q').value = S.q; C.searchCat = 'all'; actions.cSearchPage(); },
+  kExample: b => { S.q = b.dataset.q; $('#q').value = S.q; C.searchCat = 'all'; actions.cSearchPage(); },
   cSearchPage: () => { C.view = 'search'; S.sel = null; cDropClose(); renderSide(); renderDetail(true); },
   dtag: b => { $('#q').value = b.dataset.t; S.q = b.dataset.t; C.view = 'search'; S.sel = null; renderSide(); renderDetail(true); }
 });

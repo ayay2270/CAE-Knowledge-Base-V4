@@ -1,97 +1,74 @@
-/* Figures, article view and lightbox — the approved C2 design ("figures at the end").
+/* Figures, article view and lightbox — inline section and solution-step figures.
    Every figure keeps its caption, its section / step tag and a full-size viewer. */
 
 const SEC = { symptom: ['問題現象', 0], root_cause: ['原因分析', 1], solution: ['解決方法', 2], fails: ['試過但無效', 3], note: ['備註', 4], ref: ['參考來源', 5] };
 
 const CI = { figs: [] };
+const sectionKey = s => ({failed_attempts:'fails',notes:'note',reference_source:'ref'}[s] || (SEC[s] ? s : 'symptom'));
 
 /* Figures of an entry. Entries with a `figures` list (local data) or images that carry section / step fields
    (Supabase) are placed by that mapping; plain stored images attach to the problem section. */
 function cFigs(e) {
   const so = s => (SEC[s] || SEC.symptom)[1], st = s => s === 'v' ? 99 : (+s || 0);
   const list = e.figures
-    ? e.figures.map(f => ({ ...f, sec: f.section, pri: f.order }))
+    ? e.figures.map(f => ({ ...f, sec: sectionKey(f.section), pri: f.order ?? 0 }))
     /* stored images: an item may also carry section / step / title / order (key = lead picture of a section) */
-    : (e.images || []).map((im, i) => ({ path: im.path, src: im.src, mock: !!im.mock, key: im.key ?? i === 0, sec: im.section || 'symptom', step: im.step ?? 0, pri: im.order ?? i, title: im.title || im.caption || `圖片 ${i + 1}`, caption: im.caption || '' }));
+    : (e.images || []).map((im, i) => ({ path: im.path, src: im.src, mock: !!im.mock, key: im.key ?? i === 0, sec: sectionKey(im.section), step: im.step ?? 0, pri: im.order ?? i, title: im.title || im.caption || `圖片 ${i + 1}`, caption: im.caption || '' }));
   return list.sort((a, b) => so(a.sec) - so(b.sec) || st(a.step) - st(b.step) || a.pri - b.pri).map((f, i) => ({ ...f, n: i + 1 }));
 }
 
 const stepLabel = f => f.sec === 'solution' && f.step ? (f.step === 'v' ? '驗證' : `Step ${f.step}`) : '';
-const figWhere = f => SEC[f.sec][0] + (stepLabel(f) ? ' · ' + stepLabel(f) : '');
+const figWhere = f => (SEC[f.sec] || SEC.symptom)[0] + (stepLabel(f) ? ' · ' + stepLabel(f) : '');
 const imgTag = f => f.src ? `<img src="${f.src}" alt="${esc(f.title)}" width="960" height="600" loading="lazy" decoding="async">` : `<img data-path="${esc(f.path)}" alt="${esc(f.title)}">`;
 const chips = (list, lab = true) => list.length ? `<div class="c-figrefs"><i class="ti ti-photo" aria-hidden="true"></i>${lab ? '<span>相關圖</span>' : ''}${list.map(f => `<button class="c-chip" data-act="cLb" data-n="${f.n}" title="${esc(f.title)}">圖 ${f.n}</button>`).join('')}</div>` : '';
 function parseSteps(text) {
   const items = []; let cur = null; const pre = [];
   for (const ln of String(text || '').split('\n')) {
     const m = ln.match(/^\s*(\d+)[.)]\s+(.*)$/);
-    if (m) { cur = { text: m[2] }; items.push(cur); }
+    if (m) { cur = { number: +m[1], text: m[2] }; items.push(cur); }
     else if (cur && ln.trim()) cur.text += ' ' + ln.trim();
     else if (!cur && ln.trim()) pre.push(ln);
   }
-  return items.length >= 2 ? { pre: pre.join('\n'), items } : null;
+  return items.length >= 1 ? { pre: pre.join('\n'), items } : null;
 }
 const stepText = t => `<div class="prose"><p>${inline(esc(t))}</p></div>`;
 
 
+function cInlineFigs(list) {
+  if (!list.length) return '';
+  return `<div class="c-inline-figs ${list.length === 1 ? 'one' : ''}">${list.map(f => `<figure id="fig-${f.n}" class="c-inline-fig"><button class="c-inline-thumb" data-act="cLb" data-n="${f.n}" aria-label="放大圖 ${f.n}：${esc(f.title || f.caption)}">${imgTag(f)}<span class="c-fig-zoom" aria-hidden="true"><i class="ti ti-arrows-maximize"></i></span></button><figcaption>圖 ${f.n}. ${esc(f.title || f.caption || '')}${f.title && f.caption && f.title !== f.caption ? `<span>${esc(f.caption)}</span>` : ''}</figcaption></figure>`).join('')}</div>`;
+}
+function cRelated(e) {
+  const tags = new Set((e.tags || []).map(t => t.toLowerCase()));
+  return S.entries.filter(x => x.id !== e.id).map(x => ({entry:x,score:(x.category === e.category ? 3 : 0) + (x.tags || []).filter(t => tags.has(t.toLowerCase())).length * 2})).filter(x => x.score > 0).sort((a,b) => b.score-a.score || new Date(b.entry.updated_at)-new Date(a.entry.updated_at) || a.entry.id.localeCompare(b.entry.id)).slice(0,4).map(x => x.entry);
+}
 function cArticle(el, e) {
-  const p = KBH.parts(e);
-  const figs = CI.figs = cFigs(e);
+  const p = KBH.parts(e), figs = CI.figs = cFigs(e);
   const root = catByKey(C.root) || C_OTHER;
-  const order = cChapters(C.root).flatMap(ch => ch.items);
-  const i = order.findIndex(x => x.id === e.id), prev = order[i - 1], next = order[i + 1];
-  const words = [e.symptom, e.root_cause, e.solution, e.notes].join('').length;
   const bySec = s => figs.filter(f => f.sec === s);
-  const refsFor = s => chips(bySec(s));
-  /* solution */
   const st = parseSteps(e.solution);
-  let sol;
+  let sol = `<div class="prose">${p.sections[2].html}</div>` + cInlineFigs(bySec('solution'));
   if (st) {
-    const vfigs = figs.filter(f => f.sec === 'solution' && f.step === 'v'), loose = figs.filter(f => f.sec === 'solution' && !f.step);
-    sol = (st.pre ? `<div class="prose">${md(st.pre)}</div>` : '') + `<ol class="c-steps">${st.items.map((it, k) => {
-      const sf = figs.filter(f => f.sec === 'solution' && f.step === k + 1);
-      return `<li id="step-${k + 1}"><span class="c-sn" aria-label="Step ${k + 1}">${k + 1}</span><div class="c-sb">${stepText(it.text)}${chips(sf, false)}</div></li>`;
-    }).join('')}</ol>` +
-      (vfigs.length ? chips(vfigs, true).replace('相關圖', '驗證圖') : '') +
-      chips(loose, false);
-  } else sol = `<div class="prose">${p.sections[2].html}</div>` + refsFor('solution');
-  const sect = (id, h, body) => `<section id="sec-${id}"><h2>${h}</h2>${body}</section>`;
-  /* figures are collected in a gallery after the text */
-  const endFigs = figs.length ? cEndFigs(figs) : '';
-  const toc = [['symptom', '問題現象'], ['root_cause', '原因分析'], ['solution', '解決方法'], ...(p.fails.length ? [['fails', '試過但無效']] : []), ...(p.note ? [['note', '備註']] : []), ...(p.ref ? [['ref', '參考來源']] : []), ...(figs.length ? [['figs', '附圖 Figures']] : [])];
-  const related = S.entries.filter(x => x.id !== e.id && (x.tags || []).some(t => (e.tags || []).includes(t))).slice(0, 4);
-  el.innerHTML = `<div class="c-page-wrap">
-    <article class="c-article">
-      ${cCrumb([{ t: '所有文章', act: 'cHome' }, { t: root.label || '其他', act: 'cCat', k: C.root }, ...(p.c.parent ? [{ t: p.c.label, act: 'cCat', k: e.category }] : []), { t: e.title }])}
-      <h1>${esc(e.title)}</h1>
-      <div class="c-meta"><span>${KBH.icon(e.category)}${esc(p.c.path)}</span><span><i class="ti ti-calendar"></i>${fmtDate(e.updated_at)} 更新</span><span><i class="ti ti-clock"></i>約 ${Math.max(1, Math.round(words / 350))} 分鐘閱讀</span>${figs.length ? `<span><i class="ti ti-photo"></i>${figs.length} 張圖</span>` : ''}${e._prototype ? '<span class="k-proto">本機原型</span>' : ''}
-        <span class="c-actions">${p.actions}</span></div>
-      ${p.tags ? `<div class="tags">${p.tags}</div>` : ''}
-      ${sect('symptom', '問題現象', `<div class="prose">${md(e.symptom) || '<span class="pending">尚未填寫</span>'}</div>` + refsFor('symptom'))}
-      ${sect('root_cause', '原因分析', `<div class="prose">${md(e.root_cause) || '<span class="pending">尚未填寫</span>'}</div>` + refsFor('root_cause'))}
-      ${sect('solution', '解決方法', `<div class="c-callout ok"><div class="c-co-h"><i class="ti ti-circle-check"></i>建議做法</div>${sol}</div>`)}
-      ${p.fails.length ? sect('fails', '試過但無效', `<div class="c-callout bad"><div class="c-co-h"><i class="ti ti-alert-triangle"></i>以下方法無法解決此問題</div>${p.failsHtml}</div>` + refsFor('fails')) : ''}
-      ${p.note ? sect('note', '備註', `<div class="c-callout note"><div class="prose">${p.noteHtml}</div></div>` + refsFor('note')) : ''}
-      ${p.ref ? sect('ref', '參考來源', `<div class="prose c-ref">${p.refHtml}</div>` + refsFor('ref')) : ''}
-      ${endFigs}
-      <div class="c-pn">
-        ${prev ? `<button data-act="cOpen" data-id="${prev.id}"><small>← 上一篇</small><span>${esc(prev.title)}</span></button>` : '<span></span>'}
-        ${next ? `<button class="n" data-act="cOpen" data-id="${next.id}"><small>下一篇 →</small><span>${esc(next.title)}</span></button>` : '<span></span>'}
-      </div>
-    </article>
-    <aside class="c-toc"><div class="c-toc-in">
-      <div class="c-toc-h">本頁內容</div>
-      ${toc.map(([id, l]) => `<a href="#sec-${id}" data-act="cJump" data-t="sec-${id}">${l}</a>`).join('')}
-      ${related.length ? `<div class="c-toc-h" style="margin-top:22px">相關文章</div>${related.map(r => `<a data-act="cOpen" data-id="${r.id}" href="#${r.id}" class="rel">${esc(r.title)}</a>`).join('')}` : ''}
-    </div></aside></div>`;
-};
-
-
-function cEndFigs(list) {
-  const card = f => `<figure class="c-fcard" id="fig-${f.n}"><button class="c-fthumb" data-act="cLb" data-n="${f.n}" aria-label="放大 圖 ${f.n}：${esc(f.title)}">${imgTag(f)}<span class="c-fnum">圖 ${f.n}</span><span class="c-fig-zoom" aria-hidden="true"><i class="ti ti-arrows-maximize"></i></span></button>
-    <figcaption><button class="c-ftag" data-act="cJump" data-t="${f.sec === 'solution' && f.step && f.step !== 'v' ? 'step-' + f.step : 'sec-' + f.sec}" title="跳到對應段落">${esc(figWhere(f))}<i class="ti ti-arrow-up-right" aria-hidden="true"></i></button><span class="t">${esc(f.title)}</span><span class="s">${esc(f.caption)}</span></figcaption></figure>`;
-  return `<section id="sec-figs" class="c-endfigs"><h2>附圖 <em>Figures</em><span class="c-fcount">${list.length} 張</span></h2>
-    <p class="c-figs-note">點擊縮圖放大；標籤標示所屬段落／步驟，可跳回對應文字。</p>
-    <div class="c-fgrid ${list.length === 1 ? 'one' : ''}">${list.map(card).join('')}</div></section>`;
+    const numbered = new Set(st.items.map(it => it.number));
+    const loose = bySec('solution').filter(f => !numbered.has(Number(f.step)));
+    sol = (st.pre ? `<div class="prose">${md(st.pre)}</div>` : '') + `<ol class="c-steps">${st.items.map(it => `<li id="step-${it.number}"><span class="c-sn" aria-label="Step ${it.number}">${it.number}</span><div class="c-sb">${stepText(it.text)}${cInlineFigs(bySec('solution').filter(f => Number(f.step) === it.number))}</div></li>`).join('')}</ol>` + cInlineFigs(loose);
+  }
+  const sections = [
+    ['symptom','問題現象',`<div class="prose">${p.sections[0].html}</div>`],
+    ['root_cause','原因分析',`<div class="prose">${p.sections[1].html}</div>`],
+    ['solution','解決方法',sol],
+    ['fails','試過但無效',`<div class="prose">${p.failsHtml || '<span class="pending">尚未記錄</span>'}</div>`],
+    ['note','備註',`<div class="prose">${p.noteHtml || '<span class="pending">尚未記錄</span>'}</div>`],
+    ['ref','參考來源',`<div class="prose c-ref">${p.refHtml || '<span class="pending">尚未記錄</span>'}</div>`]
+  ];
+  const related = cRelated(e);
+  el.innerHTML = `<div class="c-page-wrap"><article class="c-article">
+    ${cCrumb([{t:'所有文章',act:'cHome'},{t:root.label,act:'cCat',k:C.root},...(p.c.parent ? [{t:p.c.label,act:'cCat',k:e.category}] : []),{t:e.title}])}
+    <div class="c-article-label">${esc(p.c.label)}</div><h1>${esc(e.title)}</h1>
+    <div class="c-meta"><span>更新：<time datetime="${esc(e.updated_at)}">${fmtDate(e.updated_at)}</time></span>${e._prototype ? '<span class="k-proto">本機原型</span>' : ''}<span class="c-actions">${p.actions}</span></div>
+    ${sections.map(([id,label,body]) => `<section id="sec-${id}"><h2>${label}</h2>${body}${id !== 'solution' ? cInlineFigs(bySec(id)) : ''}</section>`).join('')}
+    ${related.length ? `<section id="sec-related" class="c-related"><h2>相關知識</h2>${related.map(r => `<button data-act="cOpen" data-id="${esc(r.id)}"><span>${esc(r.title)}</span><small>${esc(catInfo(r.category).label)}</small><i class="ti ti-arrow-right" aria-hidden="true"></i></button>`).join('')}</section>` : ''}
+    </article><aside class="c-toc" aria-label="文章目錄"><div class="c-toc-in"><div class="c-toc-h">On this page</div>${sections.map(([id,label]) => `<a href="#sec-${id}" data-act="cJump" data-t="sec-${id}">${label}</a>`).join('')}${related.length ? '<a href="#sec-related" data-act="cJump" data-t="sec-related">相關知識</a>' : ''}</div></aside></div>`;
 }
 
 /* ---------------- lightbox ---------------- */

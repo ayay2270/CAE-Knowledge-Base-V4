@@ -1,3 +1,27 @@
+# Search-first Desktop Concept R1
+
+This branch is an isolated UI/UX concept for CAE Knowledge Base V4.
+
+It does not modify or replace the production `main` branch.
+
+## Live Preview
+
+https://raw.githack.com/ayay2270/CAE-Knowledge-Base-V4/concept-search-first-desktop-r1/index.html
+
+The configured Supabase mode remains available. For the bundled sample data and browser-only Add Knowledge prototype, append `?source=local` to the preview URL.
+
+## Production
+
+https://ayay2270.github.io/CAE-Knowledge-Base-V4/
+
+## Branch
+
+`concept-search-first-desktop-r1`
+
+The concept uses globally sorted article rows, software search tabs, inline section/step figures, a sticky article TOC, and deterministic related knowledge (same category and shared tags). Provider, authentication, storage, and deployment settings retain the V4 implementation.
+
+---
+
 # CAE Knowledge Base V4
 
 **Live site: https://ayay2270.github.io/CAE-Knowledge-Base-V4/** (GitHub Pages, served from `main`, root folder)

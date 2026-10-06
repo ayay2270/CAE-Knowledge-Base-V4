@@ -66,7 +66,7 @@ function terms(q) {
   q = (q || '').toLowerCase().trim();
   if (!q) return [];
   const parts = q.split(/[\s,;:()\[\]{}"'=<>|\/\\*!?。，、：；（）]+/)
-    .filter(t => (t.length >= 2 || /[\u4e00-\u9fff]/.test(t)) && !/^[\d.+\-e]+$/.test(t));
+    .filter(t => (t.length >= 2 || /[\u4e00-\u9fff]/.test(t)));
   return [...new Set(parts)].slice(0, 40);
 }
 function hay(e) {
@@ -81,7 +81,7 @@ function visible() {
     return arr.map(e => {
       const h = hay(e), ti = (e.title || '').toLowerCase();
       let s = 0, hit = 0;
-      for (const x of ts) if (h.includes(x)) { hit++; s += ti.includes(x) ? 3 : 1; }
+      for (const x of ts) if (h.includes(x)) { hit++; s += ti.includes(x) ? 5 : (e.tags || []).some(t => t.toLowerCase().includes(x)) ? 3 : 1; }
       return { e, s, hit };
     }).filter(o => o.hit >= need).sort((a, b) => b.s - a.s).map(o => o.e);
   }
@@ -187,7 +187,7 @@ const KBH = {
   },
   snippet(e, n = 110) {
     const ts = terms(S.q);
-    const fields = [e.symptom, e.root_cause, e.solution, e.notes].map(KBH.plain).filter(Boolean);
+    const fields = [e.symptom, e.root_cause, e.solution, (e.failed_attempts || []).join(' '), e.notes, e.reference_source, (e.tags || []).join(' ')].map(KBH.plain).filter(Boolean);
     let src = fields[0] || '';
     if (ts.length) {
       const hit = fields.find(f => ts.some(t => f.toLowerCase().includes(t)));
